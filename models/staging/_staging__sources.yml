@@ -139,6 +139,10 @@ sources:
       - name: dim_conversations
         description: >
           One row per support/host conversation thread tied to a booking. Grain: one row per conversation_id.
+        loaded_at_field: generated_at
+        freshness:
+          warn_after: {count: 4, period: hour}
+          error_after: {count: 12, period: hour}
         columns:
           - name: conversation_id
             description: Primary key. Unique identifier for a conversation thread.
@@ -192,10 +196,19 @@ sources:
             description: Time in seconds from conversation open to resolution.
           - name: is_support
             description: Boolean flag indicating whether the conversation was handled by support (vs. host directly).
+          - name: generated_at
+            description: >
+              Wall-clock timestamp the synthetic dataset was generated (not a business
+              column) -- doubles as the incremental cursor for stg_dim_conversations and the
+              source freshness check.
 
       - name: fact_chat_messages
         description: >
           One row per individual message sent within a conversation thread. Grain: one row per message_id.
+        loaded_at_field: generated_at
+        freshness:
+          warn_after: {count: 4, period: hour}
+          error_after: {count: 12, period: hour}
         columns:
           - name: message_id
             description: Primary key. Unique identifier for a message.
@@ -240,3 +253,8 @@ sources:
               - non_negative
           - name: message_length
             description: Character length of the message text.
+          - name: generated_at
+            description: >
+              Wall-clock timestamp the synthetic dataset was generated (not a business
+              column) -- doubles as the incremental cursor for stg_fact_chat_messages and the
+              source freshness check.

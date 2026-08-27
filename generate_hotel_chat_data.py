@@ -440,7 +440,8 @@ def generate_bookings(n_bookings: int, n_users: int, n_properties: int, properti
 
 def generate_conversations_and_messages(bookings: dict, n_messages_target: int, property_names: list,
                                          support_agent_pool: int, seed: int, chunk_size: int,
-                                         convo_out_path: str, msg_out_path: str, avg_msgs_per_convo: float = 9.0):
+                                         convo_out_path: str, msg_out_path: str, avg_msgs_per_convo: float = 9.0,
+                                         generated_at: dt.datetime = None):
     """Streams dim_conversations.parquet and fact_chat_messages.parquet.
     Conversation count is derived from n_messages_target / avg_msgs_per_convo.
     Everything is generated and flushed in chunks of --chunk-size messages,
@@ -448,6 +449,7 @@ def generate_conversations_and_messages(bookings: dict, n_messages_target: int, 
     rng = np.random.default_rng(seed + 4)
     py_rng = random.Random(seed + 4)
     base_date = dt.date(2024, 1, 1)
+    generated_at = generated_at or dt.datetime.now()
 
     n_bookings = len(bookings["booking_id"])
     n_convos = max(1, int(n_messages_target / avg_msgs_per_convo))
@@ -487,6 +489,9 @@ def generate_conversations_and_messages(bookings: dict, n_messages_target: int, 
             "first_response_time_seconds": pa.array(convo_chunk["first_response_time_seconds"], type=pa.int32()),
             "resolution_time_seconds": pa.array(convo_chunk["resolution_time_seconds"], type=pa.int32()),
             "is_support": pa.array(convo_chunk["is_support"], type=pa.bool_()),
+            "generated_at": pa.array(
+                [generated_at] * len(convo_chunk["conversation_id"]), type=pa.timestamp("s")
+            ),
         })
         if convo_writer is None:
             convo_writer = pq.ParquetWriter(convo_out_path, table.schema, compression="snappy")
@@ -511,6 +516,9 @@ def generate_conversations_and_messages(bookings: dict, n_messages_target: int, 
             "language": pa.array(msg_chunk["language"], type=pa.string()),
             "response_latency_seconds": pa.array(msg_chunk["response_latency_seconds"], type=pa.int32()),
             "message_length": pa.array(msg_chunk["message_length"], type=pa.int16()),
+            "generated_at": pa.array(
+                [generated_at] * len(msg_chunk["message_id"]), type=pa.timestamp("s")
+            ),
         })
         nonlocal msg_writer
         if msg_writer is None:
@@ -707,6 +715,7 @@ def main():
         os.path.join(args.out_dir, "dim_conversations.parquet"),
         os.path.join(args.out_dir, "fact_chat_messages.parquet"),
         avg_msgs_per_convo=args.avg_msgs_per_convo,
+        generated_at=dt.datetime.now().replace(microsecond=0),
     )
 
     print(f"\nDone. Wrote {n_convos:,} conversations and {n_msgs:,} chat messages to {args.out_dir}/")

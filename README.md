@@ -118,6 +118,65 @@ dbt docs generate && dbt docs serve   # browse full column-level documentation
 All paths in `_staging__sources.yml` are relative to the project root — run
 `dbt`/`duckdb` commands from `booking_project/`, not a subdirectory.
 
+### Staging is incremental
+
+`stg_dim_conversations` and `stg_fact_chat_messages` are `materialized='incremental'`,
+keyed on `conversation_id`/`message_id` and filtered on a `generated_at`
+cursor column (wall-clock time the row was generated, not a business date) —
+a re-run only pulls in rows newer than what's already loaded instead of
+rescanning the full source every time. `generated_at` is excluded from every
+model downstream of staging; it exists purely as the incremental cursor and
+the [freshness check](#keeping-the-dashboard-fresh) below.
+
+If you change the materialization or need to force a clean rebuild:
+`dbt run --full-refresh --select stg_dim_conversations stg_fact_chat_messages`.
+
+## Keeping the dashboard fresh
+
+`dashboard_prototype/*.html` embed their chart/drill-down data as static JSON
+(`<script type="application/json">` blocks) rather than querying the
+warehouse live, so they go stale whenever the underlying data or marts
+change. `scripts/refresh_pipeline.sh` re-syncs them:
+
+```bash
+scripts/refresh_pipeline.sh
+```
+
+It runs, in order: `dbt build` (rebuild marts against current `data/*.parquet`,
+incrementally per above), `dbt source freshness` (reports staleness,
+non-blocking), then `scripts/export_dashboard_data.py`, which re-queries the
+marts and replaces each dashboard's JSON blocks in place — everything else in
+the HTML (layout, JS, styling) is left untouched. The drill-down conversation
+set (`dd-data`) is reselected deterministically (fixed reservoir-sample seed)
+so it's the same 216 conversations on every re-run against unchanged data.
+
+This script does **not** regenerate synthetic data — run
+`python3 generate_hotel_chat_data.py` yourself first if you want a new
+dataset; `scripts/refresh_pipeline.sh` just rebuilds/re-exports from whatever
+is currently in `data/*.parquet`.
+
+### Source freshness
+
+`dim_conversations` and `fact_chat_messages` have a `freshness` check
+(`warn_after: 4 hours`, `error_after: 12 hours`, checked via `loaded_at_field:
+generated_at`) — `dbt source freshness` flags if the data hasn't been
+regenerated recently. Run it standalone with:
+
+```bash
+dbt source freshness
+```
+
+### Automating the refresh
+
+There's no cron job installed for this yet — installing one requires Full
+Disk Access for your terminal app (System Settings → Privacy & Security),
+which is a machine-level change only you can make. To run the refresh
+weekly, add this via `crontab -e`:
+
+```
+0 6 * * 1 cd /Users/limpij/Documents/gruntwork_/booking_project && ./scripts/refresh_pipeline.sh >> logs/refresh_cron.log 2>&1
+```
+
 ## Testing
 
 Every primary/surrogate key is tested `unique` + `not_null`, every foreign key
