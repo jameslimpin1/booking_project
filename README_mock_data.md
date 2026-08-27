@@ -37,6 +37,14 @@ deliberately correlated with first-response speed** (slow first response → low
 CSAT) so the dataset actually supports the kind of "how do we improve chat
 experience" analysis you're after — e.g. bucket by response time and watch CSAT drop.
 
+`status` and `csat_score` are also kept coherent with how each conversation's
+transcript actually ends: a thread can't be `resolved` if it ends without ever
+getting a reply (including the single-message "opened, never answered" case),
+and CSAT takes an added penalty when the guest's last message went unanswered.
+Without this, the generator would independently roll "resolved, CSAT 5" for a
+conversation whose last message is a guest question nobody ever replied to —
+which is exactly the kind of thing a real chat-QA process would look for.
+
 ## Why this stays lean on 8GB RAM
 
 1. **Small dimension tables** (users/hosts/properties) are built once, fully in

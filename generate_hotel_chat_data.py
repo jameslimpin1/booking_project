@@ -553,13 +553,39 @@ def generate_conversations_and_messages(bookings: dict, n_messages_target: int, 
         first_response = int(np.clip(rng.exponential(600), 30, 7200))  # seconds
         resolution = int(first_response + np.clip(rng.exponential(1800), 60, 86400))
         status = py_rng.choices(CONVO_STATUSES, weights=[0.75, 0.15, 0.10])[0]
-        # CSAT correlates with resolution status AND how fast the first
-        # response was -- slow first response measurably drags CSAT down,
-        # which is the kind of relationship you'd want to mine from this
-        # dataset when optimizing the chat experience.
+
+        # Decide who sends each message *before* picking status/CSAT, so both
+        # stay consistent with how the conversation actually ends -- without
+        # this, status and CSAT are drawn independently of the transcript and
+        # you get things like a "resolved" thread with a perfect CSAT whose
+        # last message is an unanswered guest question.
+        senders = []
+        for i in range(n_msgs):
+            if i == 0:
+                senders.append(("guest", user_id))
+            elif py_rng.random() < 0.5:
+                senders.append(("guest", user_id))
+            elif is_support:
+                sender_type = py_rng.choices(["support_agent", "bot"], weights=[0.8, 0.2])[0]
+                senders.append((sender_type, py_rng.randint(1, support_agent_pool) if sender_type == "support_agent" else 0))
+            else:
+                senders.append(("host", host_id))
+        ends_unanswered = senders[-1][0] == "guest"
+
+        # A thread can't be "resolved" if it ends without ever getting a
+        # reply (including the single-message "opened, never answered" case).
+        if status == "resolved" and (n_msgs == 1 or ends_unanswered):
+            status = "open"
+
+        # CSAT correlates with resolution status, how fast the first
+        # response was (slow first response measurably drags CSAT down), and
+        # whether the guest's last message ever got a reply at all -- these
+        # are the kind of relationships you'd want to mine from this dataset
+        # when optimizing the chat experience.
         base_csat = 4.4 if status == "resolved" else 3.0
         speed_penalty = min(1.5, first_response / 3600.0)  # up to -1.5 for slow (~1hr+) first response
-        csat = int(np.clip(rng.normal(base_csat - speed_penalty, 0.7), 1, 5))
+        unanswered_penalty = 1.8 if (n_msgs == 1 or ends_unanswered) else 0.0
+        csat = int(np.clip(rng.normal(base_csat - speed_penalty - unanswered_penalty, 0.7), 1, 5))
 
         p_name = property_names[property_id - 1]
 
@@ -585,20 +611,7 @@ def generate_conversations_and_messages(bookings: dict, n_messages_target: int, 
         for i in range(n_msgs):
             if total_msgs_written >= n_messages_target:
                 break
-            if i == 0:
-                sender_type = "guest"
-                sender_id = user_id
-            else:
-                # alternate-ish between guest and (host or support agent or bot)
-                if py_rng.random() < 0.5:
-                    sender_type = "guest"
-                    sender_id = user_id
-                elif is_support:
-                    sender_type = py_rng.choices(["support_agent", "bot"], weights=[0.8, 0.2])[0]
-                    sender_id = py_rng.randint(1, support_agent_pool) if sender_type == "support_agent" else 0
-                else:
-                    sender_type = "host"
-                    sender_id = host_id
+            sender_type, sender_id = senders[i]
 
             latency = 0 if i == 0 else int(np.clip(rng.exponential(300), 5, 14400))
             t = t + dt.timedelta(seconds=latency)
