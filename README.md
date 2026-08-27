@@ -155,4 +155,3 @@ dbt build              # run models + tests together
 - [x] Marts layer powering the dashboard
 - [x] Dashboard prototype (loss-by-stage, month × pattern heatmap, complaint cohorts, price-quintile risk)
 - [x] Schema tests (`unique`/`not_null`/`relationships` + custom generic tests) across staging, intermediate, and marts models
-- [ ] Sankey customer-journey view (in progress, see `dashboard_prototype_page2.html`)
