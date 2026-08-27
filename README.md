@@ -118,10 +118,32 @@ dbt docs generate && dbt docs serve   # browse full column-level documentation
 All paths in `_staging__sources.yml` are relative to the project root — run
 `dbt`/`duckdb` commands from `booking_project/`, not a subdirectory.
 
+## Testing
+
+Every primary/surrogate key is tested `unique` + `not_null`, every foreign key
+has a `relationships` test, and bounded/numeric columns get a lightweight
+sanity check — enough to catch a broken join or a silently-wrong CASE
+expression without testing every column on every model.
+
+Four custom generic tests live in `macros/generic_tests/` and are reused
+across staging, intermediate, and marts models:
+
+| Test | Checks | Used for |
+|---|---|---|
+| `between(min_value, max_value)` | column falls within a range | scores/percentiles (0–1), CSAT (1–5), ratings (0–5), percentages (0–100), sentiment (-1–1) |
+| `non_negative` | column is not < 0 | prices, counts, durations, latencies |
+| `unique_combination_of_columns(combination_of_columns)` | no duplicate rows across a set of columns | composite-grain marts, e.g. `(month, channel, loyalty_tier, event_pattern)` |
+| `not_constant` | column has more than one distinct value | catches a model silently collapsing to one value |
+
+```bash
+dbt test              # run all tests
+dbt build              # run models + tests together
+```
+
 ## Roadmap
 
 - [x] Staging + intermediate layers
 - [x] Marts layer powering the dashboard
 - [x] Dashboard prototype (loss-by-stage, month × pattern heatmap, complaint cohorts, price-quintile risk)
-- [ ] Schema tests (`unique`/`not_null`/`relationships`) across staging models
+- [x] Schema tests (`unique`/`not_null`/`relationships` + custom generic tests) across staging, intermediate, and marts models
 - [ ] Sankey customer-journey view (in progress, see `dashboard_prototype_page2.html`)

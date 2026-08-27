@@ -13,6 +13,9 @@ sources:
         columns:
           - name: user_id
             description: Primary key. Unique identifier for a user.
+            tests:
+              - unique
+              - not_null
           - name: full_name
             description: User's full name.
           - name: country
@@ -28,12 +31,19 @@ sources:
         columns:
           - name: host_id
             description: Primary key. Unique identifier for a host.
+            tests:
+              - unique
+              - not_null
           - name: host_name
             description: Host's name.
           - name: country
             description: Host's country of residence.
           - name: response_rate
             description: Host's historical message response rate, as a decimal fraction between 0 and 1.
+            tests:
+              - between:
+                  min_value: 0
+                  max_value: 1
           - name: is_superhost
             description: Boolean flag indicating whether the host holds superhost status.
 
@@ -43,8 +53,15 @@ sources:
         columns:
           - name: property_id
             description: Primary key. Unique identifier for a property.
+            tests:
+              - unique
+              - not_null
           - name: host_id
             description: Foreign key to dim_hosts. Host who owns/manages the property.
+            tests:
+              - relationships:
+                  to: source('raw', 'dim_hosts')
+                  field: host_id
           - name: property_name
             description: Listing name of the property.
           - name: property_type
@@ -55,10 +72,18 @@ sources:
             description: Country where the property is located.
           - name: bedrooms
             description: Number of bedrooms in the property.
+            tests:
+              - non_negative
           - name: price_per_night
             description: Listed nightly price for the property.
+            tests:
+              - non_negative
           - name: rating
             description: Average guest rating for the property.
+            tests:
+              - between:
+                  min_value: 0
+                  max_value: 5
           - name: review_count
             description: Total number of guest reviews for the property.
 
@@ -68,12 +93,27 @@ sources:
         columns:
           - name: booking_id
             description: Primary key. Unique identifier for a booking.
+            tests:
+              - unique
+              - not_null
           - name: property_id
             description: Foreign key to dim_properties. Property that was booked.
+            tests:
+              - relationships:
+                  to: source('raw', 'dim_properties')
+                  field: property_id
           - name: host_id
             description: Foreign key to dim_hosts. Host of the booked property.
+            tests:
+              - relationships:
+                  to: source('raw', 'dim_hosts')
+                  field: host_id
           - name: user_id
             description: Foreign key to dim_users. Guest who made the booking.
+            tests:
+              - relationships:
+                  to: source('raw', 'dim_users')
+                  field: user_id
           - name: booking_created_at
             description: Date the booking was created/reserved.
           - name: checkin_date
@@ -82,12 +122,19 @@ sources:
             description: Scheduled check-out date for the stay.
           - name: nights
             description: Number of nights booked (checkout_date minus checkin_date).
+            tests:
+              - non_negative
           - name: status
             description: Current status of the booking (e.g. confirmed, cancelled, completed).
+            tests:
+              - accepted_values:
+                  values: ['confirmed', 'cancelled', 'completed']
           - name: channel
             description: Booking channel/platform through which the reservation was made.
           - name: total_price
             description: Total price charged for the booking.
+            tests:
+              - non_negative
 
       - name: dim_conversations
         description: >
@@ -95,24 +142,50 @@ sources:
         columns:
           - name: conversation_id
             description: Primary key. Unique identifier for a conversation thread.
+            tests:
+              - unique
+              - not_null
           - name: booking_id
             description: Foreign key to fact_bookings. Booking the conversation relates to.
+            tests:
+              - relationships:
+                  to: source('raw', 'fact_bookings')
+                  field: booking_id
           - name: user_id
             description: Foreign key to dim_users. Guest participant in the conversation.
+            tests:
+              - relationships:
+                  to: source('raw', 'dim_users')
+                  field: user_id
           - name: host_id
             description: Foreign key to dim_hosts. Host participant in the conversation.
+            tests:
+              - relationships:
+                  to: source('raw', 'dim_hosts')
+                  field: host_id
           - name: property_id
             description: Foreign key to dim_properties. Property the conversation relates to.
+            tests:
+              - relationships:
+                  to: source('raw', 'dim_properties')
+                  field: property_id
           - name: channel
             description: Communication channel used for the conversation (e.g. chat, email, phone).
           - name: intent_category
             description: Categorized primary intent/topic of the conversation (e.g. cancellation_request).
           - name: status
             description: Current status of the conversation (e.g. open, resolved, escalated).
+            tests:
+              - accepted_values:
+                  values: ['open', 'resolved', 'escalated']
           - name: opened_at
             description: Timestamp the conversation was opened.
           - name: csat_score
             description: Customer satisfaction score reported for the conversation.
+            tests:
+              - between:
+                  min_value: 1
+                  max_value: 5
           - name: first_response_time_seconds
             description: Time in seconds from conversation open to the first response.
           - name: resolution_time_seconds
@@ -126,10 +199,20 @@ sources:
         columns:
           - name: message_id
             description: Primary key. Unique identifier for a message.
+            tests:
+              - unique
+              - not_null
           - name: conversation_id
             description: Foreign key to dim_conversations. Conversation thread the message belongs to.
+            tests:
+              - relationships:
+                  to: source('raw', 'dim_conversations')
+                  field: conversation_id
           - name: sender_type
             description: Type of sender (e.g. guest, host, support, bot).
+            tests:
+              - accepted_values:
+                  values: ['guest', 'host', 'support_agent', 'bot']
           - name: sender_id
             description: Identifier of the sender, referencing either dim_users or dim_hosts depending on sender_type.
           - name: sent_at
@@ -140,11 +223,20 @@ sources:
             description: Categorized intent/topic detected for this individual message.
           - name: sentiment_score
             description: Numeric sentiment score computed for the message text.
+            tests:
+              - between:
+                  min_value: -1
+                  max_value: 1
           - name: sentiment_label
             description: Categorical sentiment label derived from sentiment_score (e.g. positive, neutral, negative).
+            tests:
+              - accepted_values:
+                  values: ['negative', 'neutral', 'positive']
           - name: language
             description: Detected language of the message text.
           - name: response_latency_seconds
             description: Time in seconds since the previous message in the conversation.
+            tests:
+              - non_negative
           - name: message_length
             description: Character length of the message text.

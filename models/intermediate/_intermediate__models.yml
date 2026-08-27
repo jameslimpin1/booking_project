@@ -14,6 +14,17 @@ models:
           - not_null
       - name: cancellation_risk_score
         description: Weighted composite risk score in [0, 1]; higher is riskier.
+        tests:
+          - between:
+              min_value: 0
+              max_value: 1
+          - not_constant
+      - name: risk_percentile
+        description: Percentile rank (0-1) of cancellation_risk_score, descending — lower is riskier.
+        tests:
+          - between:
+              min_value: 0
+              max_value: 1
       - name: is_top_risk_decile
         description: True for the top 10% of confirmed bookings by cancellation_risk_score.
 
@@ -28,6 +39,14 @@ models:
         tests:
           - unique
           - not_null
+      - name: message_seq
+        description: 1-indexed position of the message within its conversation.
+        tests:
+          - non_negative
+      - name: seconds_since_prev_message
+        description: Seconds since the previous message in the conversation; null for the first message.
+        tests:
+          - non_negative
 
   - name: int_conversation_journeys
     description: >
@@ -50,14 +69,30 @@ models:
           of what happened.
       - name: opening_sentiment
         description: sentiment_score of the conversation's first message.
+        tests:
+          - between:
+              min_value: -1
+              max_value: 1
       - name: closing_sentiment
         description: sentiment_score of the conversation's last message.
+        tests:
+          - between:
+              min_value: -1
+              max_value: 1
       - name: sentiment_delta
         description: closing_sentiment minus opening_sentiment. Negative means the conversation soured.
       - name: escalation_handoff_count
         description: Count of messages where sender_type flips to support_agent from something else.
+        tests:
+          - non_negative
       - name: delayed_reply_count
         description: Count of messages arriving more than 900 seconds (15 min) after the previous one.
+        tests:
+          - non_negative
+      - name: duration_seconds
+        description: Seconds between the conversation's first and last message.
+        tests:
+          - non_negative
 
   - name: int_at_risk_conversations
     description: >
@@ -70,6 +105,12 @@ models:
         tests:
           - unique
           - not_null
+      - name: booking_id
+        description: Foreign key to int_booking_cancellation_risk. Booking this at-risk conversation belongs to.
+        tests:
+          - relationships:
+              to: ref('int_booking_cancellation_risk')
+              field: booking_id
 
   - name: int_at_risk_conversation_concerns
     description: >
@@ -82,3 +123,7 @@ models:
           - not_null
       - name: concern_rank
         description: Rank 1-5 by conversation_count descending.
+        tests:
+          - between:
+              min_value: 1
+              max_value: 5

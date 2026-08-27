@@ -41,12 +41,27 @@ models:
           above, so the category is exhaustive).
         tests:
           - not_null
+          - accepted_values:
+              values:
+                - unanswered_opening
+                - escalated_and_delayed
+                - escalated_support
+                - delayed_reply
+                - ends_frustrated
+                - negative_opening
+                - multiple_negative
+                - sentiment_worsened
+                - long_conversation
+                - low_csat
+                - no_pattern
       - name: topic_cluster
         description: complaint / everyday / praise, grouped from conversation_primary_intent.
       - name: is_cancelled
         description: True when the linked booking's status is 'cancelled'.
       - name: total_price
         description: The linked booking's total_price, carried onto every conversation row for that booking.
+        tests:
+          - non_negative
 
   - name: mart_loss_by_month_pattern
     description: >
@@ -54,6 +69,9 @@ models:
       row per (month, channel, loyalty_tier, event_pattern). cancelled_price
       sums are safe to add across event_pattern for a fixed month, because
       mart_booking_loss_events.event_pattern is mutually exclusive.
+    tests:
+      - unique_combination_of_columns:
+          combination_of_columns: [month, channel, loyalty_tier, event_pattern]
     columns:
       - name: month
         description: Activity month, 'YYYY-MM'.
@@ -65,6 +83,8 @@ models:
           - not_null
       - name: cancelled_price
         description: Dollar value of bookings in this cell that ended up cancelled.
+        tests:
+          - non_negative
 
   - name: mart_loss_by_stage
     description: >
@@ -73,6 +93,9 @@ models:
       resummed by the page's month/channel/tier slicers). Grain: one row per
       (month, channel, loyalty_tier, journey_stage). Carries both total_price
       and cancelled_price so "% of value lost" can be computed downstream.
+    tests:
+      - unique_combination_of_columns:
+          combination_of_columns: [month, channel, loyalty_tier, journey_stage]
     columns:
       - name: journey_stage
         description: See mart_booking_loss_events.journey_stage.
@@ -80,8 +103,12 @@ models:
           - not_null
       - name: total_price
         description: Total booking value of every conversation in this cell (cancelled or not).
+        tests:
+          - non_negative
       - name: cancelled_price
         description: Dollar value lost to cancellation in this cell.
+        tests:
+          - non_negative
 
   - name: mart_complaint_cohort
     description: >
@@ -89,6 +116,9 @@ models:
       panels and the "which complaints hurt each cohort most" loyalty-tier
       breakdown. Grain: one row per (month, channel, loyalty_tier,
       intent_category).
+    tests:
+      - unique_combination_of_columns:
+          combination_of_columns: [month, channel, loyalty_tier, intent_category]
     columns:
       - name: intent_category
         description: Conversation topic label (e.g. refund_request, wifi_issue).
@@ -96,6 +126,10 @@ models:
           - not_null
       - name: topic_cluster
         description: complaint / everyday / praise grouping for intent_category.
+      - name: cancelled_price
+        description: Dollar value of bookings in this cell that ended up cancelled.
+        tests:
+          - non_negative
 
   - name: mart_price_quintile_risk
     description: >
@@ -108,11 +142,21 @@ models:
       - name: price_quintile
         description: 1 (cheapest 20%) through 5 (most expensive 20%).
         tests:
+          - unique
           - not_null
+          - between:
+              min_value: 1
+              max_value: 5
       - name: cancellation_rate_pct
         description: Share of bookings in this quintile that cancelled, as a percentage.
+        tests:
+          - between:
+              min_value: 0
+              max_value: 100
       - name: revenue_lost_to_cancellation
         description: Total booking value lost to cancellation within this quintile.
+        tests:
+          - non_negative
 
   - name: mart_unanswered_opening_monthly
     description: >
@@ -129,7 +173,23 @@ models:
         tests:
           - unique
           - not_null
+      - name: cohort_base_cancel_rate_pct
+        description: Baseline cancellation rate across all bookings in the month's cohort.
+        tests:
+          - between:
+              min_value: 0
+              max_value: 100
+      - name: pct_unanswered_opening
+        description: Share of the month's bookings whose conversation had an unanswered opening message.
+        tests:
+          - between:
+              min_value: 0
+              max_value: 100
       - name: unanswered_opening_cancel_rate_pct
         description: >
           Cancellation rate among that month's unanswered-opening bookings.
           Null when the month had zero such bookings (0/0).
+        tests:
+          - between:
+              min_value: 0
+              max_value: 100
