@@ -1,5 +1,12 @@
 # Booking Messaging & Rewards — Analytics Pipeline
 
+> **Superseded.** This monorepo has been split into
+> [booking_project_pipeline](https://github.com/jameslimpin1/booking_project_pipeline)
+> (the dbt/DuckDB pipeline) and
+> [booking_project_dashboard](https://github.com/jameslimpin1/booking_project_dashboard)
+> (the dashboard, [live via GitHub Pages](https://jameslimpin1.github.io/booking_project_dashboard/dashboard_prototype.html)).
+> Kept here for history; new work happens in those two repos.
+
 A portfolio project simulating a Data Engineer role on Booking.com's Messaging &
 Rewards team: a medallion-architecture analytics pipeline built with **dbt** and
 **DuckDB** on top of a synthetic hotel chat/booking dataset, feeding a "Why We
@@ -10,16 +17,16 @@ Lose Bookings" dashboard.
 - **DuckDB** — embedded warehouse (`warehouse/booking.duckdb`, gitignored — rebuild with `dbt run`)
 - **dbt-duckdb** — data modeling, testing, documentation
 - **Parquet** (`data/*.parquet`) — synthetic raw source files, read directly by dbt sources via `read_parquet()`
-- **Static HTML/JS dashboard** (`dashboard_prototype/`) — consumes the marts layer for the exec-facing report
+- **Static HTML/JS dashboard** — now in the separate [booking_project_dashboard](https://github.com/jameslimpin1/booking_project_dashboard) repo
 
 ## Data architecture
 
 Medallion layout, each layer a dbt model directory:
 
 ```
-data/*.parquet  →  models/staging/  →  models/intermediate/  →  models/marts/  →  dashboard_prototype/
-   (raw)              (1:1 views)         (joins, business          (consumption-        (static site)
-                                             logic)                   ready tables)
+data/*.parquet  →  models/staging/  →  models/intermediate/  →  models/marts/  →  booking_project_dashboard
+   (raw)              (1:1 views)         (joins, business          (consumption-        (separate repo,
+                                             logic)                   ready tables)        static site)
 ```
 
 | Layer | Location | Materialization | Purpose |
@@ -75,15 +82,12 @@ Each mart is consumption-ready and maps to a specific piece of the dashboard:
 Full column-level docs live in `models/marts/_marts__models.yml` and are browsable
 via `dbt docs generate && dbt docs serve`.
 
-### Dashboard (`dashboard_prototype/`)
+### Dashboard ([booking_project_dashboard](https://github.com/jameslimpin1/booking_project_dashboard), separate repo)
 
 Static HTML/JS prototype consuming the marts above:
 
 - `dashboard_prototype.html` — main "Why We Lose Bookings" report (KPIs, loss-by-stage table, month × pattern heatmap, complaint cohorts, price-quintile chart)
 - `dashboard_prototype_page2.html` — customer-journey / Sankey drill-down view
-
-This started as a separate repo ([booking-dashboard-prototype](https://github.com/jameslimpin1/booking-dashboard-prototype),
-published via GitHub Pages); these copies are the actively developed versions.
 
 ### Analysis (`analysis/`)
 
@@ -136,49 +140,14 @@ trading that correctness away — every model here stays a full recompute.
 
 ## Keeping the dashboard fresh
 
-`dashboard_prototype/*.html` embed their chart/drill-down data as static JSON
-(`<script type="application/json">` blocks) rather than querying the
-warehouse live, so they go stale whenever the underlying data or marts
-change. `scripts/refresh_pipeline.sh` re-syncs them:
-
-```bash
-scripts/refresh_pipeline.sh
-```
-
-It runs, in order: `dbt build` (rebuild marts against current
-`data/*.parquet`), `dbt source freshness` (reports staleness, non-blocking),
-then `scripts/export_dashboard_data.py`, which re-queries the marts and
-replaces each dashboard's JSON blocks in place — everything else in the HTML
-(layout, JS, styling) is left untouched. The drill-down conversation set
-(`dd-data`) is reselected deterministically (fixed reservoir-sample seed) so
-it's the same 216 conversations on every re-run against unchanged data.
-
-This script does **not** regenerate synthetic data — run
-`python3 generate_hotel_chat_data.py` yourself first if you want a new
-dataset; `scripts/refresh_pipeline.sh` just rebuilds/re-exports from whatever
-is currently in `data/*.parquet`.
-
-### Source freshness
-
-`dim_conversations` and `fact_chat_messages` have a `freshness` check
-(`warn_after: 4 hours`, `error_after: 12 hours`, checked via `loaded_at_field:
-generated_at`) — `dbt source freshness` flags if the data hasn't been
-regenerated recently. Run it standalone with:
-
-```bash
-dbt source freshness
-```
-
-### Automating the refresh
-
-There's no cron job installed for this yet — installing one requires Full
-Disk Access for your terminal app (System Settings → Privacy & Security),
-which is a machine-level change only you can make. To run the refresh
-weekly, add this via `crontab -e`:
-
-```
-0 6 * * 1 cd /Users/limpij/Documents/gruntwork_/booking_project && ./scripts/refresh_pipeline.sh >> logs/refresh_cron.log 2>&1
-```
+The dashboard now lives in a separate repo
+([booking_project_dashboard](https://github.com/jameslimpin1/booking_project_dashboard)),
+and so does the up-to-date refresh tooling (`scripts/refresh_pipeline.sh`,
+`scripts/export_dashboard_data.py`, source freshness config, cron line) — see
+[booking_project_pipeline's README](https://github.com/jameslimpin1/booking_project_pipeline#keeping-the-dashboard-fresh)
+for current instructions. The copies of those scripts in this repo predate
+the split and write to a `dashboard_prototype/` folder that no longer exists
+here.
 
 ## Testing
 
