@@ -15,6 +15,11 @@ models:
       booking — a booking with two conversations in the window contributes two
       rows. This matches how the dashboard's published "bookings" figures have
       always been computed; check downstream aggregates before deduping.
+    tests:
+      - value_matches_upstream:
+          column_name: total_price
+          compare_model: ref('stg_fact_bookings')
+          join_key: booking_id
     columns:
       - name: conversation_id
         description: Primary key, one row per conversation.
@@ -72,6 +77,10 @@ models:
     tests:
       - unique_combination_of_columns:
           combination_of_columns: [month, channel, loyalty_tier, event_pattern]
+      - agg_matches_upstream:
+          column_name: cancelled_price
+          compare_model: ref('mart_booking_loss_events')
+          compare_column_expr: "case when is_cancelled then total_price else 0 end"
     columns:
       - name: month
         description: Activity month, 'YYYY-MM'.
@@ -96,6 +105,13 @@ models:
     tests:
       - unique_combination_of_columns:
           combination_of_columns: [month, channel, loyalty_tier, journey_stage]
+      - agg_matches_upstream:
+          column_name: total_price
+          compare_model: ref('mart_booking_loss_events')
+      - agg_matches_upstream:
+          column_name: cancelled_price
+          compare_model: ref('mart_booking_loss_events')
+          compare_column_expr: "case when is_cancelled then total_price else 0 end"
     columns:
       - name: journey_stage
         description: See mart_booking_loss_events.journey_stage.
@@ -119,6 +135,13 @@ models:
     tests:
       - unique_combination_of_columns:
           combination_of_columns: [month, channel, loyalty_tier, intent_category]
+      - agg_matches_upstream:
+          column_name: total_price
+          compare_model: ref('mart_booking_loss_events')
+      - agg_matches_upstream:
+          column_name: cancelled_price
+          compare_model: ref('mart_booking_loss_events')
+          compare_column_expr: "case when is_cancelled then total_price else 0 end"
     columns:
       - name: intent_category
         description: Conversation topic label (e.g. refund_request, wifi_issue).
@@ -138,6 +161,11 @@ models:
       equal-sized groups by total_price. Cancellation rate is flat across
       groups by design of the underlying data; revenue_lost_to_cancellation is
       not, since it scales with price — that contrast is the point of the chart.
+    tests:
+      - agg_matches_upstream:
+          column_name: revenue_lost_to_cancellation
+          compare_model: ref('mart_booking_loss_events')
+          compare_column_expr: "case when is_cancelled then total_price else 0 end"
     columns:
       - name: price_quintile
         description: 1 (cheapest 20%) through 5 (most expensive 20%).
@@ -167,6 +195,18 @@ models:
       sample noise alone; treat the pooled 12-month rate (see
       mart_booking_loss_events where event_pattern = 'unanswered_opening') as
       the reliable number, not any single month here.
+    tests:
+      - agg_matches_upstream:
+          column_name: total_bookings_in_cohort
+          model_agg: sum
+          compare_model: ref('mart_booking_loss_events')
+          compare_agg: count
+      - agg_matches_upstream:
+          column_name: unanswered_opening_bookings
+          model_agg: sum
+          compare_model: ref('mart_booking_loss_events')
+          compare_agg: count
+          compare_where: "event_pattern = 'unanswered_opening'"
     columns:
       - name: month
         description: Activity month, 'YYYY-MM'.

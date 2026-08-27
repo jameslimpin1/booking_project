@@ -135,6 +135,15 @@ across staging, intermediate, and marts models:
 | `unique_combination_of_columns(combination_of_columns)` | no duplicate rows across a set of columns | composite-grain marts, e.g. `(month, channel, loyalty_tier, event_pattern)` |
 | `not_constant` | column has more than one distinct value | catches a model silently collapsing to one value |
 
+Two more, in `macros/mart_tests/`, reconcile mart-level aggregates back to
+their upstream model so a broken join or a filter that silently drops rows
+shows up as a test failure, not a wrong dashboard number:
+
+| Test | Checks | Used for |
+|---|---|---|
+| `value_matches_upstream(column_name, compare_model, join_key)` | row-level: column matches the same key's value upstream | `mart_booking_loss_events.total_price` vs. `stg_fact_bookings.total_price` per `booking_id` |
+| `agg_matches_upstream(column_name, compare_model, model_agg, compare_agg, compare_where, tolerance)` | an aggregate (sum/count/avg) on this model matches the same aggregate upstream, within a rounding tolerance | e.g. `sum(cancelled_price)` in `mart_loss_by_stage` reproduces `sum(case when is_cancelled then total_price else 0 end)` in `mart_booking_loss_events` |
+
 ```bash
 dbt test              # run all tests
 dbt build              # run models + tests together
