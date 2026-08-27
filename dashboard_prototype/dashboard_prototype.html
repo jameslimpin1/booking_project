@@ -1,0 +1,458 @@
+<title>Why We Lose Bookings — Prototype</title>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page:           #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline-axis:  #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --series-1:       #2a78d6;   /* categorical slot 1 — blue, magnitude */
+    --series-1-soft:  #cde2fb;   /* seq step 100 */
+    --status-critical:#d03b3b;
+    --status-critical-soft: #f7dede;
+    --status-good:    #0ca30c;
+    --success-text:   #006300;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page:           #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --baseline-axis:  #383835;
+      --border:         rgba(255,255,255,0.10);
+      --series-1:       #3987e5;
+      --series-1-soft:  #184f95;
+      --status-critical:#e66767;
+      --status-critical-soft: #3a2222;
+      --status-good:    #0ca30c;
+      --success-text:   #0ca30c;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --page:           #0d0d0d;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --baseline-axis:  #383835;
+    --border:         rgba(255,255,255,0.10);
+    --series-1:       #3987e5;
+    --series-1-soft:  #184f95;
+    --status-critical:#e66767;
+    --status-critical-soft: #3a2222;
+    --status-good:    #0ca30c;
+    --success-text:   #0ca30c;
+  }
+
+  .viz-root {
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 32px 20px 64px;
+    box-sizing: border-box;
+    min-height: 100%;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  h1 { font-size: 26px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .subtitle { color: var(--text-secondary); font-size: 15px; margin: 0 0 32px; max-width: 640px; line-height: 1.5; }
+
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+    box-sizing: border-box;
+    overflow-x: auto;
+  }
+  .card h2 { font-size: 15px; font-weight: 700; margin: 0 0 4px; }
+  .card .desc { color: var(--text-secondary); font-size: 13px; margin: 0 0 20px; line-height: 1.5; max-width: 620px; }
+
+  /* Hero */
+  .hero { display: flex; gap: 32px; flex-wrap: wrap; align-items: center; }
+  .hero-figure { font-size: 56px; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
+  .hero-sub { font-size: 15px; color: var(--text-secondary); margin-top: 8px; max-width: 260px; line-height: 1.4; }
+  .hero-stat { min-width: 200px; }
+  .hero-caption { font-size: 12px; color: var(--text-muted); margin-top: 12px; }
+  .hero-divider { width: 1px; align-self: stretch; background: var(--gridline); }
+  .hero-note {
+    flex: 1; min-width: 240px; font-size: 14px; color: var(--text-secondary); line-height: 1.6;
+  }
+  .hero-note strong { color: var(--text-primary); }
+
+  /* Bar chart */
+  .barchart { display: flex; flex-direction: column; gap: 14px; }
+  .bar-row { display: grid; grid-template-columns: 200px 1fr 92px; align-items: center; gap: 12px; }
+  .bar-label { font-size: 13px; color: var(--text-primary); text-align: right; line-height: 1.35; }
+  .bar-track { position: relative; height: 22px; background: transparent; }
+  .bar-fill {
+    position: absolute; left: 0; top: 0; height: 100%;
+    border-radius: 0 4px 4px 0;
+    display: flex; align-items: center;
+  }
+  .bar-baseline {
+    position: absolute; top: -6px; bottom: -6px; width: 2px;
+    background: var(--baseline-axis);
+  }
+  .bar-value { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--text-primary); font-weight: 600; }
+  .bar-flag { font-size: 11px; color: var(--status-critical); font-weight: 600; white-space: nowrap; }
+  .axis-caption { display: grid; grid-template-columns: 200px 1fr 92px; font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+  .legend { display: flex; gap: 18px; margin-bottom: 18px; font-size: 12px; color: var(--text-secondary); flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-swatch { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+
+  /* Trend chart */
+  .trend-wrap { position: relative; }
+  svg { display: block; overflow: visible; }
+  .trend-line { fill: none; stroke: var(--series-1); stroke-width: 2px; }
+  .trend-dot { fill: var(--surface-1); stroke: var(--series-1); stroke-width: 2px; }
+  .trend-baseline { stroke: var(--baseline-axis); stroke-width: 1px; stroke-dasharray: 3 3; }
+  .trend-gridline { stroke: var(--gridline); stroke-width: 1px; }
+  .trend-axis-label { fill: var(--text-muted); font-size: 10px; font-family: system-ui, sans-serif; }
+  .trend-tooltip {
+    position: absolute; pointer-events: none; background: var(--text-primary); color: var(--surface-1);
+    font-size: 11px; padding: 6px 9px; border-radius: 6px; line-height: 1.4;
+    transform: translate(-50%, -115%); white-space: nowrap; opacity: 0; transition: opacity 0.1s;
+    z-index: 5;
+  }
+  .trend-dot-hit { fill: transparent; cursor: pointer; }
+
+  .rev-hero { display: flex; gap: 28px; align-items: baseline; flex-wrap: wrap; margin-bottom: 18px; }
+  .rev-figure { font-size: 34px; font-weight: 700; letter-spacing: -0.01em; }
+  .rev-sub { font-size: 12.5px; color: var(--text-secondary); max-width: 260px; line-height: 1.4; }
+
+  details.table-toggle { margin-top: 16px; font-size: 13px; }
+  details.table-toggle summary {
+    cursor: pointer; color: var(--series-1); font-weight: 600; list-style: none; user-select: none;
+  }
+  details.table-toggle summary::before { content: "▸ "; }
+  details.table-toggle[open] summary::before { content: "▾ "; }
+  table.data-table { border-collapse: collapse; margin-top: 12px; width: 100%; font-size: 12px; }
+  table.data-table th, table.data-table td {
+    text-align: right; padding: 6px 10px; border-bottom: 1px solid var(--gridline);
+    font-variant-numeric: tabular-nums; color: var(--text-secondary);
+  }
+  table.data-table th:first-child, table.data-table td:first-child { text-align: left; color: var(--text-primary); }
+  table.data-table th { color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.02em; }
+  table.data-table tr.low-n td { color: var(--text-muted); }
+
+  .callout {
+    background: var(--surface-1); border: 1px solid var(--border); border-left: 4px solid var(--status-good);
+    border-radius: 8px; padding: 20px 24px; display: flex; gap: 16px; align-items: flex-start;
+  }
+  .callout-icon { font-size: 20px; line-height: 1; flex: none; }
+  .callout h2 { margin: 0 0 6px; }
+  .callout p { margin: 0; font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
+
+  .footer-note { font-size: 12px; color: var(--text-muted); margin-top: 28px; line-height: 1.6; }
+  .footer-note a { color: var(--text-muted); }
+
+  @media (max-width: 560px) {
+    .bar-row { grid-template-columns: 120px 1fr 70px; }
+    .axis-caption { grid-template-columns: 120px 1fr 70px; }
+    .hero-figure { font-size: 44px; }
+  }
+</style>
+
+<div class="viz-root">
+  <div class="wrap">
+
+    <div style="font-size:13px; margin-bottom:20px;"><strong>Page 1: Executive summary</strong> &nbsp;·&nbsp; <a href="https://claude.ai/code/artifact/c6030ec5-1b24-4482-b68b-bf0d755bd090" style="color:var(--series-1); text-decoration:none; font-weight:600;">Page 2: Explorer →</a></div>
+    <h1>Why We Lose Bookings</h1>
+    <p class="subtitle">
+      Prototype dashboard for the Evidence.dev report — trailing 12 months of
+      conversation &amp; booking data (2024-07-22 to 2025-07-22), 58,505 bookings.
+    </p>
+
+    <!-- Hero -->
+    <div class="card">
+      <div class="hero">
+        <div class="hero-stat">
+          <div class="hero-figure">1 in 7</div>
+          <div class="hero-sub">bookings get cancelled (14.8%) — the baseline every finding below is measured against</div>
+          <div class="hero-caption">58,505 bookings · trailing 12 months</div>
+        </div>
+        <div class="hero-divider"></div>
+        <div class="hero-note">
+          What the guest messages <strong>about</strong> barely moves this number.
+          What matters is whether we <strong>reply at all</strong> — guests whose
+          opening message goes unanswered cancel at nearly
+          <strong>1 in 4</strong>, the clearest fixable driver in the data.
+        </div>
+      </div>
+    </div>
+
+    <!-- Revenue lost to cancellation -->
+    <div class="card">
+      <h2>Revenue lost to cancellation</h2>
+      <p class="desc">
+        Across the trailing 12 months, how much booking value did cancellations
+        actually cost us — and where in the journey did it happen?
+      </p>
+      <div class="rev-hero">
+        <div>
+          <div class="rev-figure" id="rev-lost">—</div>
+          <div class="rev-sub">lost to cancellation, trailing 12 months</div>
+        </div>
+        <div>
+          <div class="rev-figure" id="rev-total" style="font-size:20px; color:var(--text-secondary);">—</div>
+          <div class="rev-sub">total booking value in the same window</div>
+        </div>
+        <div>
+          <div class="rev-figure" id="rev-rate" style="font-size:20px; color:var(--text-secondary);">—</div>
+          <div class="rev-sub">of value lost to cancellation</div>
+        </div>
+      </div>
+      <div class="legend">
+        <div class="legend-item"><span class="legend-swatch" style="background:var(--status-critical)"></span>Revenue lost to cancellation, by journey stage</div>
+      </div>
+      <div class="barchart" id="rev-stage-chart"></div>
+      <details class="table-toggle">
+        <summary>View data table</summary>
+        <div id="rev-table"></div>
+      </details>
+      <p class="desc" style="margin-top:14px; margin-bottom:0;">
+        Want to slice this by month, channel, or loyalty tier? See
+        <a href="https://claude.ai/code/artifact/c6030ec5-1b24-4482-b68b-bf0d755bd090" style="color:var(--series-1); font-weight:600; text-decoration:none;">Page 2: Explorer →</a>
+      </p>
+    </div>
+
+    <!-- Topic chart -->
+    <div class="card">
+      <h2>What guests message about doesn't predict cancellation</h2>
+      <p class="desc">Cancellation rate by conversation topic. All three land within a point of the 1-in-7 baseline — complaining is not the risk signal.</p>
+      <div class="legend">
+        <div class="legend-item"><span class="legend-swatch" style="background:var(--series-1)"></span>Cancellation rate</div>
+        <div class="legend-item"><span class="legend-swatch" style="background:var(--baseline-axis); width:2px; border-radius:0;"></span>Baseline (14.8%)</div>
+      </div>
+      <div class="barchart" id="topic-chart"></div>
+      <div class="axis-caption"><span></span><span>0%</span><span style="text-align:right">25%</span></div>
+    </div>
+
+    <!-- Event pattern chart -->
+    <div class="card">
+      <h2>Silence is the pattern that predicts cancellation — nothing else tested does</h2>
+      <p class="desc">Cancellation rate by what happened in the conversation. Only one pattern clears the baseline by a meaningful margin.</p>
+      <div class="legend">
+        <div class="legend-item"><span class="legend-swatch" style="background:var(--status-critical)"></span>Elevated risk</div>
+        <div class="legend-item"><span class="legend-swatch" style="background:var(--series-1)"></span>No meaningful difference</div>
+        <div class="legend-item"><span class="legend-swatch" style="background:var(--baseline-axis); width:2px; border-radius:0;"></span>Baseline (14.8%)</div>
+      </div>
+      <div class="barchart" id="event-chart"></div>
+      <div class="axis-caption"><span></span><span>0%</span><span style="text-align:right">25%</span></div>
+    </div>
+
+    <!-- Value concentration -->
+    <div class="card">
+      <h2>Booking value doesn't predict who cancels — but it predicts what it costs us</h2>
+      <p class="desc">
+        We split bookings into five equal-sized groups by price. The cancellation
+        rate is flat across every group (14–15%) — a $2,500 booking is no more
+        likely to cancel than a $250 one. But because higher-value bookings lose
+        more revenue when they do cancel, <strong>the top price fifth accounts for
+        43% of all revenue lost to cancellation ($5.6M of $12.8M)</strong>, despite
+        being just 20% of bookings.
+      </p>
+      <div class="legend">
+        <div class="legend-item"><span class="legend-swatch" style="background:var(--series-1)"></span>Revenue lost to cancellation, by price group</div>
+      </div>
+      <div class="barchart" id="value-chart"></div>
+      <div class="axis-caption"><span></span><span>$0</span><span style="text-align:right">$5.6M</span></div>
+      <details class="table-toggle">
+        <summary>View data table</summary>
+        <div id="value-table"></div>
+      </details>
+    </div>
+
+    <!-- Priority callout -->
+    <div class="callout" style="border-color: var(--series-1);">
+      <div class="callout-icon">🎯</div>
+      <div>
+        <h2>Prioritize the unanswered-opening queue by booking value</h2>
+        <p>
+          The 86 bookings with a completely unanswered opening message
+          (Section 3) are cheap to clear entirely — but if support capacity
+          is ever constrained, work that list highest-value first. It won't
+          change the odds of any one booking cancelling, but it protects
+          more revenue per reply sent.
+        </p>
+      </div>
+    </div>
+
+    <!-- Recommendation -->
+    <div class="callout">
+      <div class="callout-icon">✅</div>
+      <div>
+        <h2>Recommended next step</h2>
+        <p>
+          Add a response-time alert for any guest message left unanswered beyond a
+          set window (e.g. a few hours). This directly targets the only pattern in
+          the data clearly linked to lost bookings, is cheap to implement, and
+          doesn't require interpreting message content or sentiment.
+        </p>
+      </div>
+    </div>
+
+    <div class="footer-note">
+      Prototype only — data is synthetic (portfolio dataset). See
+      <code>analysis/report_customer_loss_points.md</code> for full methodology,
+      including why topic-based sentiment doesn't add independent signal here.
+    </div>
+
+  </div>
+</div>
+
+<script id="rev-agg-data" type="application/json">{"cols":["month","channel","loyalty_tier","stage","bookings","cancelled_bookings","total_price","cancelled_price"],"rows":[["2025-02","email","none","3_late_mid",108,24,143704.07,29602.12],["2025-02","sms","gold","3_late_mid",13,2,13356.79,1466.61],["2025-02","whatsapp","gold","3_late_mid",26,6,29217.03,5723.45],["2025-03","in_app","gold","2_early_mid",129,15,160828.24,21817.52],["2025-03","sms","silver","2_early_mid",61,9,88790.85,15203.98],["2025-04","in_app","silver","2_early_mid",275,32,335792.75,34987.16],["2025-04","in_app","gold","3_late_mid",66,12,78001.05,13462.3],["2025-04","sms","platinum","1_opening",16,2,13642.33,1501.25],["2025-04","email","silver","4_closing",26,6,36196.71,9883.76],["2024-08","whatsapp","none","3_late_mid",174,28,197131.43,29568.05],["2024-08","sms","platinum","2_early_mid",16,2,19464.23,2311.36],["2024-08","in_app","platinum","1_opening",70,11,77053.61,11745.05],["2024-08","in_app","silver","4_closing",87,7,105610.67,10736.78],["2024-08","sms","none","4_closing",41,3,58811.01,3340.73],["2024-08","whatsapp","platinum","2_early_mid",13,1,11584.48,880.59],["2025-01","in_app","silver","3_late_mid",169,21,190004.44,26825.01],["2025-01","email","silver","1_opening",117,16,145899.46,22452.72],["2025-01","whatsapp","silver","3_late_mid",71,7,87149.68,8895.69],["2025-01","whatsapp","gold","1_opening",52,3,70272.07,3573.87],["2025-01","sms","platinum","2_early_mid",10,2,12635.0,5138.0],["2025-01","sms","silver","2_early_mid",47,4,56849.5,1551.68],["2024-11","in_app","none","1_opening",834,127,974080.09,157236.91],["2024-11","whatsapp","gold","3_late_mid",17,1,19853.42,1725.49],["2025-06","in_app","gold","1_opening",76,13,84988.78,16730.42],["2025-06","email","silver","2_early_mid",35,4,42079.42,6353.6],["2025-06","sms","none","1_opening",64,6,72209.23,5335.6],["2025-06","whatsapp","silver","4_closing",12,1,15206.53,109.63],["2025-07","in_app","silver","4_closing",9,0,9099.44,0.0],["2025-07","in_app","platinum","4_closing",1,0,3033.38,0.0],["2025-07","whatsapp","silver","1_opening",11,0,11747.01,0.0],["2025-07","whatsapp","gold","4_closing",1,1,3369.87,3369.87],["2024-12","whatsapp","none","1_opening",320,46,364231.56,55926.46],["2024-12","in_app","none","2_early_mid",694,93,828504.88,109762.91],["2024-12","sms","gold","1_opening",27,5,43069.76,8947.19],["2024-12","in_app","platinum","3_late_mid",34,7,41111.69,6307.6],["2024-12","sms","platinum","1_opening",13,2,18582.91,2842.73],["2024-10","whatsapp","silver","2_early_mid",113,17,142572.13,21411.35],["2024-10","whatsapp","platinum","1_opening",25,2,33226.72,3899.82],["2024-10","sms","silver","1_opening",88,12,120174.08,19169.92],["2024-10","sms","platinum","2_early_mid",10,1,11645.67,1777.1],["2024-09","whatsapp","none","3_late_mid",142,23,153503.85,29109.23],["2024-09","in_app","platinum","2_early_mid",50,6,54907.09,5606.16],["2024-07","whatsapp","platinum","3_late_mid",9,2,12633.73,1730.82],["2024-07","in_app","platinum","1_opening",25,5,39337.93,7346.27],["2025-05","in_app","gold","1_opening",134,22,178748.53,39195.21],["2025-05","whatsapp","none","1_opening",313,55,385660.92,60927.09],["2025-05","in_app","none","3_late_mid",399,59,501822.68,81860.92],["2025-05","in_app","silver","1_opening",369,53,453242.78,53597.77],["2025-05","email","platinum","2_early_mid",22,2,29802.15,1405.5],["2025-05","email","gold","2_early_mid",40,6,49691.41,9412.35],["2025-05","whatsapp","platinum","4_closing",6,0,6458.83,0.0],["2024-09","sms","gold","1_opening",29,5,39312.33,8757.32],["2025-02","whatsapp","silver","1_opening",127,16,170015.79,19903.67],["2025-02","sms","silver","4_closing",14,1,20419.47,2727.66],["2025-02","whatsapp","platinum","4_closing",6,1,7130.58,617.52],["2025-02","sms","platinum","1_opening",10,1,17238.16,387.12],["2025-02","in_app","platinum","3_late_mid",38,4,40313.45,3943.69],["2025-03","email","none","2_early_mid",204,21,251056.85,22095.63],["2025-03","sms","platinum","1_opening",18,2,19756.01,2174.89],["2025-03","whatsapp","silver","1_opening",143,21,162804.27,27584.72],["2025-04","email","gold","2_early_mid",33,3,41801.3,3397.44],["2025-04","email","none","1_opening",263,29,309291.48,31292.97],["2025-04","whatsapp","gold","2_early_mid",38,1,48191.36,2386.34],["2025-04","whatsapp","silver","4_closing",29,2,37257.19,2630.64],["2025-04","sms","none","2_early_mid",130,24,146878.74,31187.76],["2024-08","in_app","none","1_opening",921,124,1143987.8,155904.91],["2024-08","email","none","3_late_mid",111,20,129839.58,22322.37],["2024-08","whatsapp","gold","3_late_mid",29,7,33260.48,9627.71],["2025-01","in_app","gold","1_opening",169,19,192349.07,17058.42],["2024-11","email","platinum","1_opening",19,6,22527.88,7603.87],["2024-11","sms","silver","2_early_mid",53,10,66011.78,14559.97],["2024-11","email","gold","2_early_mid",30,4,42308.7,7219.06],["2024-11","email","silver","4_closing",17,7,19311.28,9237.72],["2024-11","whatsapp","platinum","4_closing",7,2,7786.62,2369.24],["2025-06","in_app","platinum","4_closing",7,3,8419.95,2970.85],["2025-07","whatsapp","none","4_closing",6,1,5962.65,1734.51],["2025-07","email","gold","2_early_mid",4,1,4008.85,952.54],["2025-07","email","none","4_closing",4,0,4178.25,0.0],["2025-07","sms","silver","4_closing",1,0,2052.81,0.0],["2024-12","email","gold","4_closing",13,3,12554.19,3284.57],["2024-12","whatsapp","platinum","3_late_mid",15,3,17523.01,4750.81],["2024-10","whatsapp","none","3_late_mid",144,24,154600.59,24100.49],["2024-10","sms","none","4_closing",36,8,39739.28,9960.93],["2024-11","sms","platinum","2_early_mid",9,1,12896.45,247.71],["2024-09","in_app","none","3_late_mid",432,66,508874.43,66630.95],["2024-09","email","gold","2_early_mid",35,2,37029.6,3363.0],["2024-09","sms","silver","2_early_mid",66,12,83399.0,18385.93],["2024-09","email","none","3_late_mid",109,24,119462.69,20961.47],["2024-09","sms","platinum","2_early_mid",10,2,5335.96,1227.41],["2024-07","whatsapp","silver","2_early_mid",37,2,48881.81,2802.22],["2024-07","in_app","gold","3_late_mid",22,5,37767.13,9114.53],["2024-07","email","silver","4_closing",7,1,7997.42,690.78],["2024-07","sms","silver","3_late_mid",7,0,4775.28,0.0],["2024-07","email","platinum","3_late_mid",5,1,6777.55,1431.97],["2025-05","sms","platinum","3_late_mid",8,3,13886.57,4299.14],["2025-05","email","silver","2_early_mid",62,5,81433.99,7181.08],["2025-06","sms","gold","4_closing",1,0,3460.56,0.0],["2025-02","whatsapp","silver","2_early_mid",100,12,123912.41,11615.53],["2025-02","sms","platinum","2_early_mid",11,1,13916.08,1673.28],["2025-03","whatsapp","silver","2_early_mid",109,20,132364.83,25268.17],["2025-03","email","none","1_opening",265,37,314738.55,40058.98],["2025-03","email","silver","4_closing",29,1,41256.36,1625.63],["2025-03","in_app","none","4_closing",202,28,259457.57,48352.73],["2025-03","sms","platinum","2_early_mid",9,1,8510.99,333.9],["2025-03","sms","gold","4_closing",7,2,11524.04,2691.74],["2025-04","email","none","2_early_mid",179,23,215738.38,22262.14],["2025-04","email","gold","1_opening",37,5,39796.51,3960.71],["2025-04","sms","none","1_opening",150,27,183995.26,31251.69],["2025-04","in_app","platinum","4_closing",17,2,19643.41,2247.57],["2025-04","sms","silver","3_late_mid",19,3,17032.94,4260.7],["2025-04","email","platinum","3_late_mid",9,0,11918.53,0.0],["2025-04","whatsapp","gold","1_opening",48,4,51125.42,3453.29],["2024-08","in_app","none","2_early_mid",698,113,814835.55,120941.06],["2024-08","sms","silver","3_late_mid",31,7,38460.3,9952.88],["2024-08","email","platinum","3_late_mid",12,1,12396.31,1116.68],["2025-01","whatsapp","platinum","3_late_mid",9,2,13531.27,2912.26],["2025-01","in_app","gold","2_early_mid",122,19,144281.39,21804.51],["2025-01","sms","none","4_closing",40,7,41646.29,4789.36],["2025-01","in_app","platinum","3_late_mid",40,3,49389.33,3091.85],["2024-11","email","platinum","2_early_mid",17,3,19618.98,4737.58],["2024-11","email","none","3_late_mid",108,15,116483.28,15750.02],["2024-11","whatsapp","none","3_late_mid",155,25,181726.22,28139.17],["2024-11","sms","silver","1_opening",63,7,70322.18,4983.98],["2024-11","whatsapp","silver","4_closing",33,6,37908.47,5932.94],["2024-11","email","gold","1_opening",46,3,58871.7,3988.83],["2024-11","sms","platinum","1_opening",10,1,12612.97,766.53],["2024-11","in_app","platinum","4_closing",14,2,13157.11,984.78],["2024-12","in_app","silver","3_late_mid",169,19,181938.1,16554.12],["2024-12","email","none","4_closing",68,12,70514.83,10534.27],["2024-12","in_app","gold","3_late_mid",65,14,72458.54,15005.18],["2024-10","sms","gold","3_late_mid",16,8,19078.5,8600.37],["2024-09","email","gold","1_opening",38,3,39557.41,2721.29],["2024-09","sms","silver","1_opening",58,9,60045.96,6206.35],["2024-09","sms","platinum","1_opening",24,1,25130.02,801.42],["2024-09","whatsapp","gold","3_late_mid",27,3,34340.43,1792.71],["2025-06","sms","platinum","3_late_mid",3,0,2611.67,0.0],["2025-06","email","platinum","4_closing",2,1,3036.64,2052.26],["2024-07","in_app","none","4_closing",79,10,86428.91,14165.95],["2024-07","email","none","3_late_mid",30,3,36921.79,5369.09],["2024-07","sms","none","4_closing",19,1,23884.75,578.38],["2024-07","whatsapp","silver","1_opening",42,5,50062.82,3981.36],["2025-05","email","silver","1_opening",93,9,113089.62,9590.54],["2025-05","sms","silver","3_late_mid",30,4,35918.4,2870.25],["2025-05","email","none","4_closing",56,10,70687.9,12357.92],["2025-03","email","gold","3_late_mid",16,2,26904.92,2475.88],["2025-02","in_app","none","4_closing",200,27,227433.36,27670.33],["2025-02","in_app","silver","4_closing",75,12,86334.37,10391.81],["2025-02","email","none","1_opening",230,38,270746.25,43908.04],["2025-02","sms","gold","1_opening",21,1,20769.65,1031.49],["2025-02","email","silver","4_closing",31,2,40970.47,506.07],["2025-02","whatsapp","gold","1_opening",50,5,54253.55,2748.4],["2025-03","in_app","silver","2_early_mid",296,49,343867.29,64973.54],["2025-03","sms","none","2_early_mid",135,20,178813.69,32047.01],["2025-03","whatsapp","none","4_closing",78,12,88519.82,13724.55],["2025-03","email","platinum","4_closing",4,0,5298.52,0.0],["2025-03","whatsapp","platinum","2_early_mid",20,0,21918.51,0.0],["2025-04","in_app","gold","1_opening",158,23,191862.65,28068.23],["2025-04","sms","platinum","3_late_mid",11,2,21050.16,2863.85],["2024-08","whatsapp","none","1_opening",320,49,389018.31,65741.04],["2024-08","email","silver","2_early_mid",70,16,80370.29,17165.3],["2024-08","email","gold","2_early_mid",28,5,32407.62,5694.53],["2024-08","in_app","platinum","3_late_mid",31,4,45074.15,6091.5],["2025-01","in_app","silver","1_opening",365,52,417215.88,52951.53],["2025-01","whatsapp","silver","1_opening",152,28,180464.77,31456.33],["2025-01","email","silver","3_late_mid",51,7,60071.69,5009.3],["2025-01","whatsapp","gold","3_late_mid",29,2,36863.49,1337.14],["2024-11","in_app","none","3_late_mid",438,67,533464.63,83196.54],["2024-11","in_app","gold","4_closing",39,6,46524.87,5464.69],["2024-11","in_app","silver","4_closing",95,14,104458.75,13804.81],["2024-11","whatsapp","gold","1_opening",45,8,54543.51,9715.2],["2025-06","sms","silver","4_closing",12,3,14149.42,3014.96],["2025-06","in_app","gold","3_late_mid",38,4,52660.46,6621.67],["2025-06","in_app","none","4_closing",121,20,146972.82,23176.4],["2025-06","email","none","2_early_mid",85,16,111988.7,21358.09],["2025-06","whatsapp","gold","4_closing",8,2,9548.31,3256.6],["2025-06","sms","none","3_late_mid",31,4,31779.8,4103.31],["2025-06","email","gold","4_closing",7,0,10570.32,0.0],["2025-07","in_app","none","2_early_mid",24,2,30395.6,2093.84],["2025-07","sms","none","2_early_mid",8,0,9993.06,0.0],["2025-07","whatsapp","silver","3_late_mid",3,0,2695.13,0.0],["2024-12","email","platinum","2_early_mid",15,3,13014.67,2468.0],["2024-12","in_app","platinum","1_opening",80,19,103101.19,22895.59],["2024-12","whatsapp","none","3_late_mid",153,17,178474.22,18804.21],["2024-12","whatsapp","silver","4_closing",28,1,38145.92,1258.52],["2024-12","sms","none","4_closing",35,2,50283.62,1167.46],["2024-12","sms","platinum","3_late_mid",10,0,10197.69,0.0],["2024-12","sms","gold","3_late_mid",13,1,18831.97,1494.21],["2024-12","whatsapp","gold","4_closing",9,3,13085.52,4276.78],["2024-10","email","platinum","2_early_mid",12,1,13698.28,875.94],["2024-10","sms","silver","3_late_mid",42,10,43456.87,9340.66],["2024-10","whatsapp","platinum","3_late_mid",11,2,10829.91,1608.96],["2024-09","sms","none","2_early_mid",117,13,136884.36,10604.51],["2024-09","in_app","silver","4_closing",75,8,72415.07,7164.38],["2024-09","whatsapp","none","1_opening",313,52,339145.89,63401.46],["2024-07","whatsapp","platinum","1_opening",13,1,16704.7,2829.82],["2024-07","in_app","silver","2_early_mid",92,14,108765.89,18043.93],["2024-07","in_app","platinum","3_late_mid",12,4,12680.56,3815.17],["2025-05","in_app","none","1_opening",841,119,1041793.69,149958.53],["2025-05","in_app","gold","3_late_mid",75,8,92757.13,13758.82],["2025-05","whatsapp","none","3_late_mid",123,11,149921.07,20979.68],["2025-05","in_app","silver","3_late_mid",165,22,184892.82,24700.77],["2024-09","sms","gold","3_late_mid",12,2,13572.93,1567.82],["2025-01","email","platinum","4_closing",3,0,1691.32,0.0],["2025-02","whatsapp","none","3_late_mid",143,21,169531.61,23965.96],["2025-02","whatsapp","silver","4_closing",33,3,47225.68,1881.15],["2025-02","sms","silver","1_opening",55,10,65493.21,10860.01],["2025-02","whatsapp","platinum","1_opening",23,3,25123.35,4547.95],["2025-02","sms","platinum","4_closing",3,2,4133.38,2674.24],["2025-02","in_app","gold","3_late_mid",58,5,79785.97,10553.25],["2025-03","sms","gold","2_early_mid",25,3,25981.24,2921.83],["2025-03","in_app","platinum","3_late_mid",44,7,49662.4,6762.65],["2025-03","whatsapp","silver","4_closing",37,4,53223.93,5618.13],["2025-03","in_app","none","2_early_mid",703,93,867328.17,109241.61],["2025-03","email","silver","2_early_mid",71,7,81411.43,9886.19],["2025-03","sms","platinum","4_closing",6,0,7187.03,0.0],["2025-04","in_app","platinum","2_early_mid",62,10,73327.03,11287.73],["2025-04","whatsapp","silver","1_opening",131,17,151501.13,15588.91],["2025-04","email","none","4_closing",60,7,68324.42,8300.12],["2024-08","in_app","none","4_closing",201,26,232794.35,21106.77],["2025-01","email","none","3_late_mid",113,22,127922.61,27093.87],["2025-01","sms","none","2_early_mid",127,18,173607.54,27527.17],["2025-01","in_app","gold","4_closing",43,5,57828.69,5301.17],["2024-11","email","silver","1_opening",101,14,116214.82,13590.8],["2024-11","in_app","platinum","2_early_mid",66,8,72715.14,7400.59],["2024-11","whatsapp","silver","2_early_mid",110,19,126016.41,18776.4],["2024-11","whatsapp","platinum","1_opening",34,5,48816.52,9450.06],["2024-11","email","platinum","4_closing",5,2,2677.01,1635.29],["2025-06","in_app","platinum","1_opening",37,2,54195.57,773.74],["2025-06","sms","gold","1_opening",13,4,13050.37,3798.51],["2025-07","email","none","1_opening",8,1,7562.88,773.49],["2025-07","whatsapp","none","1_opening",17,2,17425.07,1853.22],["2025-07","sms","silver","1_opening",3,0,3420.09,0.0],["2024-12","email","none","2_early_mid",167,22,223205.17,33294.17],["2024-12","email","gold","1_opening",47,4,55860.25,7291.85],["2024-10","in_app","silver","3_late_mid",182,20,199404.04,25320.71],["2024-10","sms","none","1_opening",162,31,188209.26,39963.09],["2024-10","in_app","gold","3_late_mid",76,5,81914.82,5944.22],["2024-09","email","platinum","3_late_mid",11,0,12877.26,0.0],["2025-06","email","platinum","2_early_mid",8,2,12608.08,5305.6],["2024-07","email","silver","1_opening",44,10,51336.97,7775.69],["2024-07","in_app","none","2_early_mid",241,38,279830.86,45373.47],["2024-07","sms","none","2_early_mid",31,3,36892.56,4116.2],["2024-07","sms","platinum","3_late_mid",2,0,3357.32,0.0],["2025-05","email","none","2_early_mid",173,18,201885.28,21561.6],["2025-05","in_app","platinum","3_late_mid",37,8,45491.66,13346.74],["2025-05","whatsapp","gold","3_late_mid",18,3,20487.39,3025.57],["2025-02","sms","none","4_closing",35,10,39481.7,10155.95],["2025-03","sms","none","3_late_mid",81,13,94557.19,16763.13],["2025-03","in_app","silver","3_late_mid",192,25,236437.94,31712.49],["2025-03","in_app","gold","1_opening",157,19,189460.61,24878.71],["2025-03","sms","silver","1_opening",65,9,78139.68,11947.06],["2025-03","whatsapp","platinum","3_late_mid",13,5,15580.84,5793.7],["2025-04","in_app","silver","1_opening",379,47,438659.6,56454.59],["2025-04","in_app","none","4_closing",226,28,304754.52,36430.09],["2025-04","whatsapp","none","4_closing",73,11,84305.22,12038.48],["2025-04","sms","platinum","2_early_mid",9,1,9990.51,897.25],["2024-08","email","silver","3_late_mid",44,4,52962.81,3232.78],["2024-08","in_app","platinum","2_early_mid",52,6,61389.48,5852.97],["2024-08","whatsapp","platinum","1_opening",27,5,37538.96,8051.85],["2024-08","sms","platinum","1_opening",15,1,29117.08,1310.72],["2024-08","email","gold","3_late_mid",14,2,16891.76,4382.75],["2025-01","email","silver","2_early_mid",97,10,116750.3,8091.63],["2025-01","sms","platinum","1_opening",10,2,10664.63,2703.97],["2025-01","sms","silver","1_opening",60,6,67846.0,7899.57],["2025-01","whatsapp","gold","2_early_mid",56,7,68849.43,6128.04],["2024-11","in_app","none","2_early_mid",662,111,784067.97,142923.31],["2024-11","sms","none","4_closing",41,4,63574.71,7642.54],["2025-06","in_app","gold","2_early_mid",55,13,67117.16,13731.17],["2025-06","email","none","3_late_mid",54,12,74944.64,15158.62],["2025-06","email","silver","1_opening",43,5,53476.83,7760.7],["2025-06","whatsapp","none","4_closing",42,5,52023.91,4461.06],["2025-06","sms","none","2_early_mid",47,7,56757.11,8211.25],["2025-07","in_app","none","3_late_mid",16,4,19834.74,2432.03],["2025-07","in_app","gold","4_closing",3,0,3678.28,0.0],["2025-07","sms","none","3_late_mid",1,0,277.65,0.0],["2025-07","whatsapp","silver","2_early_mid",2,0,2164.78,0.0],["2024-12","in_app","none","1_opening",869,141,1084570.17,178309.21],["2024-12","email","silver","4_closing",33,5,45022.54,4142.15],["2024-12","whatsapp","none","2_early_mid",243,43,282722.66,46395.09],["2024-12","sms","platinum","2_early_mid",11,0,14177.83,0.0],["2024-12","sms","gold","2_early_mid",19,2,22021.62,1711.8],["2024-10","in_app","none","4_closing",228,28,252150.44,33362.11],["2024-10","sms","silver","2_early_mid",54,7,67900.41,8683.31],["2024-10","whatsapp","silver","1_opening",143,18,159618.81,20218.69],["2024-10","whatsapp","platinum","2_early_mid",12,1,11135.13,1009.3],["2024-10","sms","platinum","1_opening",17,2,16412.01,2347.93],["2024-12","email","platinum","3_late_mid",4,2,4062.93,2554.41],["2024-09","sms","gold","2_early_mid",27,6,28911.72,8247.19],["2024-09","sms","none","3_late_mid",77,12,88894.39,14197.46],["2024-09","in_app","platinum","1_opening",77,10,88625.88,16084.86],["2024-09","whatsapp","silver","4_closing",38,5,45844.19,7554.46],["2024-09","in_app","gold","4_closing",38,6,46908.11,6402.44],["2024-07","whatsapp","none","4_closing",28,1,36977.61,2380.63],["2024-07","in_app","silver","3_late_mid",71,11,75492.22,10103.49],["2024-07","in_app","platinum","2_early_mid",23,3,20219.38,3465.24],["2025-05","in_app","silver","2_early_mid",281,42,372066.78,67790.93],["2025-05","whatsapp","none","2_early_mid",239,42,270545.13,49924.36],["2025-05","in_app","gold","2_early_mid",114,15,134609.19,15396.45],["2025-05","sms","none","4_closing",34,3,37686.83,3141.72],["2025-05","whatsapp","silver","4_closing",35,6,37254.72,4877.23],["2025-05","email","gold","1_opening",39,6,46683.83,6811.45],["2025-05","email","platinum","1_opening",24,1,26050.09,1037.15],["2024-10","email","platinum","3_late_mid",7,1,12474.37,1492.78],["2025-02","sms","none","1_opening",133,20,156577.23,25506.74],["2025-02","email","gold","3_late_mid",18,3,21218.87,3325.9],["2025-03","whatsapp","gold","3_late_mid",22,2,24023.36,1424.98],["2025-03","sms","silver","4_closing",12,2,13637.08,1672.88],["2025-03","in_app","gold","4_closing",34,4,44220.22,5812.13],["2025-04","in_app","none","1_opening",858,128,1015016.49,150246.15],["2025-04","whatsapp","none","1_opening",334,56,400002.54,56834.13],["2025-04","email","silver","2_early_mid",93,12,101708.57,16375.66],["2025-04","in_app","silver","4_closing",83,18,93067.84,19546.47],["2025-04","sms","gold","3_late_mid",18,4,23365.49,5351.69],["2024-08","in_app","silver","2_early_mid",306,40,370903.54,52309.08],["2024-08","sms","none","2_early_mid",146,16,183385.48,18828.06],["2024-08","in_app","gold","3_late_mid",71,9,81299.81,11302.06],["2024-08","whatsapp","platinum","4_closing",6,1,5338.02,2048.38],["2025-01","in_app","none","3_late_mid",413,55,494146.67,54537.76],["2025-01","sms","silver","4_closing",17,1,21546.0,1164.13],["2025-01","email","gold","3_late_mid",17,1,19325.97,2142.39],["2024-11","sms","none","1_opening",162,19,199284.47,22327.68],["2025-06","whatsapp","none","1_opening",132,17,144397.68,22472.2],["2025-06","whatsapp","silver","2_early_mid",49,6,60192.13,6620.11],["2025-06","email","silver","4_closing",11,2,8817.61,1416.05],["2025-07","in_app","platinum","2_early_mid",1,0,1351.83,0.0],["2025-07","whatsapp","gold","2_early_mid",3,2,3444.59,1836.34],["2025-07","in_app","silver","2_early_mid",14,0,22751.4,0.0],["2025-07","in_app","gold","1_opening",3,1,2897.94,1504.68],["2025-01","sms","platinum","4_closing",5,3,4584.94,3230.48],["2025-01","sms","gold","3_late_mid",4,0,2918.86,0.0],["2024-12","in_app","none","4_closing",221,42,258599.39,52450.15],["2024-12","email","silver","1_opening",110,22,114597.54,18440.6],["2024-10","email","none","3_late_mid",116,23,139127.02,25871.26],["2024-10","in_app","none","1_opening",921,130,1091116.43,145936.57],["2024-10","whatsapp","silver","4_closing",27,3,35494.95,4193.67],["2024-10","email","gold","3_late_mid",21,2,20859.81,3399.43],["2024-10","in_app","platinum","3_late_mid",26,7,38636.47,10309.76],["2024-09","whatsapp","silver","1_opening",128,17,140533.34,24047.96],["2024-09","in_app","gold","1_opening",166,28,191969.31,40949.24],["2024-09","in_app","platinum","4_closing",15,2,15025.8,2222.31],["2025-06","whatsapp","platinum","3_late_mid",5,2,6167.51,3005.39],["2024-07","whatsapp","none","1_opening",110,17,149101.29,27771.75],["2024-07","email","gold","3_late_mid",8,0,13371.47,0.0],["2024-07","sms","gold","3_late_mid",1,0,1967.29,0.0],["2025-05","sms","none","1_opening",144,33,177277.67,44564.02],["2025-05","whatsapp","silver","1_opening",151,25,207373.68,32037.11],["2025-05","email","gold","4_closing",11,2,13429.11,2015.89],["2025-05","sms","gold","3_late_mid",12,3,16654.86,5147.99],["2025-05","email","platinum","4_closing",4,1,2733.42,88.67],["2025-05","whatsapp","platinum","2_early_mid",19,3,23836.09,2840.82],["2024-10","sms","platinum","4_closing",2,0,2579.35,0.0],["2024-08","sms","platinum","4_closing",2,0,3696.58,0.0],["2025-02","whatsapp","none","2_early_mid",228,25,237782.73,16440.65],["2025-02","in_app","gold","2_early_mid",126,16,155600.14,14044.54],["2025-02","email","platinum","1_opening",20,5,23961.2,8788.85],["2025-03","in_app","platinum","2_early_mid",65,11,79535.32,12956.82],["2025-03","in_app","none","3_late_mid",405,65,498414.31,77642.55],["2025-03","email","silver","3_late_mid",66,4,90526.92,10836.21],["2025-03","email","gold","4_closing",9,1,12969.95,2134.49],["2025-04","in_app","platinum","3_late_mid",36,5,42264.0,3616.84],["2025-04","whatsapp","platinum","1_opening",24,4,22751.33,4220.92],["2025-04","sms","silver","4_closing",18,2,24687.62,2755.84],["2024-08","sms","silver","4_closing",13,2,16346.39,1356.29],["2024-08","whatsapp","silver","1_opening",144,20,157210.87,24522.89],["2024-08","sms","gold","1_opening",28,1,38660.79,2654.55],["2025-01","whatsapp","none","1_opening",336,49,383656.75,60804.94],["2025-01","email","none","2_early_mid",190,24,237598.43,26446.63],["2025-01","in_app","platinum","4_closing",25,3,24380.15,3698.77],["2025-01","sms","none","3_late_mid",80,11,93147.38,10140.59],["2024-11","in_app","platinum","3_late_mid",33,6,30453.79,6630.97],["2024-11","email","none","4_closing",56,15,71857.15,14660.19],["2024-11","whatsapp","silver","3_late_mid",64,14,58040.84,11307.69],["2024-11","whatsapp","none","4_closing",85,8,81569.46,9160.75],["2024-11","sms","gold","1_opening",22,6,30516.41,5139.95],["2025-06","in_app","silver","1_opening",176,22,213262.14,26687.35],["2025-07","sms","gold","1_opening",1,0,431.93,0.0],["2025-07","email","silver","1_opening",2,0,3822.61,0.0],["2024-12","sms","silver","1_opening",69,14,96316.78,22129.35],["2024-12","email","none","3_late_mid",116,17,142776.14,24900.09],["2024-12","in_app","silver","4_closing",102,9,123356.8,7602.62],["2024-12","in_app","gold","4_closing",35,6,35281.67,7329.69],["2024-10","in_app","gold","2_early_mid",112,14,118043.88,15893.87],["2024-10","in_app","silver","2_early_mid",281,42,356264.91,56918.3],["2024-10","email","silver","1_opening",76,16,95505.05,22466.51],["2024-10","whatsapp","gold","1_opening",54,12,74970.79,20827.34],["2024-10","sms","gold","4_closing",10,1,8949.83,1236.25],["2024-08","email","platinum","4_closing",4,1,5393.68,1400.4],["2024-09","whatsapp","gold","4_closing",18,1,22966.43,902.55],["2024-09","email","platinum","2_early_mid",10,1,13284.8,1783.25],["2024-09","email","silver","1_opening",97,13,107433.74,19352.77],["2024-09","whatsapp","platinum","1_opening",20,1,23973.08,2171.58],["2025-06","email","platinum","3_late_mid",3,1,5891.22,3454.15],["2025-04","email","platinum","4_closing",4,0,5793.72,0.0],["2024-07","in_app","none","3_late_mid",123,15,145170.09,15763.87],["2024-07","sms","none","3_late_mid",24,1,23214.8,1294.99],["2024-07","email","none","4_closing",11,1,11492.09,3203.88],["2024-07","whatsapp","gold","1_opening",11,0,14097.35,0.0],["2024-07","sms","platinum","2_early_mid",2,0,1172.18,0.0],["2025-05","email","none","3_late_mid",113,17,118307.13,20665.84],["2025-05","in_app","platinum","2_early_mid",38,4,46765.34,6319.32],["2025-05","whatsapp","gold","2_early_mid",36,5,42897.27,11027.9],["2025-05","sms","silver","4_closing",13,0,13924.33,0.0],["2025-06","sms","platinum","4_closing",2,1,1343.14,238.75],["2025-03","sms","gold","3_late_mid",11,2,8936.19,2632.94],["2025-01","whatsapp","platinum","4_closing",5,2,3584.12,983.64],["2025-02","in_app","none","3_late_mid",382,59,444029.62,67988.68],["2025-02","in_app","silver","3_late_mid",161,19,207154.34,18737.62],["2025-02","sms","none","2_early_mid",102,13,123281.76,22879.98],["2025-02","email","silver","3_late_mid",35,5,43446.04,6210.2],["2025-03","whatsapp","none","3_late_mid",151,24,162754.39,29934.06],["2025-03","email","platinum","3_late_mid",10,3,9809.97,3995.13],["2025-04","in_app","none","2_early_mid",712,110,872158.61,130165.79],["2025-04","email","silver","1_opening",93,15,119217.63,12968.02],["2025-04","whatsapp","none","2_early_mid",232,32,243142.38,37628.5],["2025-04","sms","platinum","4_closing",4,1,5620.38,526.75],["2024-08","sms","none","1_opening",167,26,203960.16,34732.48],["2024-08","in_app","silver","1_opening",379,61,462618.54,77603.73],["2024-08","in_app","platinum","4_closing",26,7,26508.75,7613.88],["2025-01","email","silver","4_closing",35,6,36429.97,4574.39],["2025-01","whatsapp","gold","4_closing",7,2,9826.32,3271.91],["2025-01","email","platinum","3_late_mid",10,0,6634.33,0.0],["2024-11","in_app","silver","3_late_mid",160,22,201125.08,26170.35],["2024-11","in_app","none","4_closing",224,45,279764.14,56631.1],["2024-11","in_app","gold","3_late_mid",61,4,68494.66,2102.47],["2024-11","sms","none","2_early_mid",133,19,149409.31,20090.13],["2025-06","in_app","none","3_late_mid",192,31,245191.09,37248.11],["2025-06","whatsapp","silver","1_opening",69,8,83945.92,9985.5],["2025-06","whatsapp","none","2_early_mid",124,17,162672.93,19819.57],["2025-06","whatsapp","gold","3_late_mid",11,3,8405.15,1196.45],["2025-06","sms","none","4_closing",18,4,19786.07,3911.41],["2025-06","in_app","gold","4_closing",16,2,18150.85,2675.24],["2025-06","email","gold","3_late_mid",10,0,12843.2,0.0],["2025-06","sms","silver","3_late_mid",15,1,14302.26,697.48],["2025-07","in_app","platinum","1_opening",4,1,6097.99,3666.65],["2025-07","in_app","gold","2_early_mid",4,0,2618.82,0.0],["2025-07","whatsapp","gold","1_opening",3,0,4558.71,0.0],["2025-07","in_app","silver","1_opening",16,1,17432.6,949.69],["2025-07","sms","platinum","1_opening",1,0,102.55,0.0],["2025-07","whatsapp","silver","4_closing",2,0,1757.04,0.0],["2024-12","whatsapp","none","4_closing",71,9,88715.21,14439.53],["2024-12","sms","none","3_late_mid",95,13,108677.16,12887.47],["2024-12","whatsapp","gold","3_late_mid",23,4,23158.28,1819.92],["2024-12","whatsapp","silver","3_late_mid",66,8,91323.04,10838.85],["2024-12","email","silver","2_early_mid",81,13,88440.99,15835.3],["2024-12","sms","platinum","4_closing",4,1,3129.05,676.51],["2024-12","sms","gold","4_closing",6,1,9533.9,148.78],["2024-10","in_app","none","2_early_mid",721,125,842346.38,151809.64],["2024-10","sms","silver","4_closing",21,2,26242.77,3477.33],["2024-09","in_app","gold","2_early_mid",104,12,124000.76,16197.64],["2024-09","in_app","silver","3_late_mid",135,24,176882.16,30481.83],["2024-09","whatsapp","silver","2_early_mid",110,17,137764.9,20296.72],["2024-09","sms","gold","4_closing",7,1,8821.17,2267.88],["2024-07","in_app","platinum","4_closing",7,0,5992.42,0.0],["2024-07","whatsapp","none","2_early_mid",103,14,133216.42,15943.82],["2025-05","in_app","silver","4_closing",80,11,84234.0,13201.34],["2025-05","sms","none","2_early_mid",111,14,125640.49,15650.56],["2025-05","whatsapp","silver","2_early_mid",90,16,103678.34,17744.66],["2025-05","whatsapp","none","4_closing",90,9,103471.49,8518.6],["2025-05","in_app","gold","4_closing",40,7,42718.36,7545.23],["2025-05","whatsapp","platinum","1_opening",20,3,25091.94,6306.97],["2024-10","whatsapp","platinum","4_closing",7,1,7168.82,2180.73],["2025-02","whatsapp","platinum","2_early_mid",21,1,23887.83,1919.78],["2025-02","sms","silver","2_early_mid",44,4,52712.83,7892.4],["2025-02","email","platinum","3_late_mid",7,2,5299.43,1448.08],["2025-03","in_app","none","1_opening",926,138,1135950.39,162244.26],["2025-03","email","none","4_closing",34,2,41315.23,2332.24],["2025-03","sms","gold","1_opening",23,8,33046.1,10966.18],["2025-03","email","silver","1_opening",87,15,108506.61,13217.61],["2025-04","whatsapp","silver","2_early_mid",131,13,144903.81,20396.58],["2025-04","in_app","platinum","1_opening",70,9,79045.29,8344.1],["2025-04","whatsapp","platinum","3_late_mid",16,1,15850.92,1971.63],["2025-04","email","gold","4_closing",7,1,6849.32,2020.29],["2025-04","sms","none","4_closing",39,5,56681.84,6429.21],["2025-04","whatsapp","gold","4_closing",12,3,15829.44,3003.96],["2024-08","whatsapp","silver","3_late_mid",54,11,62325.99,12534.65],["2024-08","sms","gold","3_late_mid",16,3,17762.66,3227.24],["2025-01","whatsapp","none","3_late_mid",159,19,196372.25,32625.78],["2025-01","sms","none","1_opening",176,27,207161.84,28422.35],["2024-11","email","silver","2_early_mid",83,17,98263.62,19541.41],["2024-11","whatsapp","platinum","2_early_mid",23,1,22476.99,1449.49],["2024-11","whatsapp","silver","1_opening",123,19,154752.91,29536.01],["2024-11","in_app","platinum","1_opening",74,11,92853.76,12650.15],["2024-11","sms","silver","4_closing",11,3,9997.13,2446.14],["2024-11","sms","gold","3_late_mid",15,2,14979.62,2504.78],["2024-11","email","gold","4_closing",7,1,4654.26,800.26],["2025-06","in_app","silver","3_late_mid",67,11,68306.62,12662.71],["2025-06","sms","gold","2_early_mid",10,1,11092.31,1215.54],["2025-06","email","platinum","1_opening",16,1,17239.29,1266.17],["2025-07","whatsapp","none","2_early_mid",7,0,5489.69,0.0],["2025-07","sms","silver","2_early_mid",2,0,1750.2,0.0],["2025-07","email","none","2_early_mid",6,0,6524.61,0.0],["2025-07","email","silver","3_late_mid",2,0,807.79,0.0],["2025-07","sms","gold","3_late_mid",1,0,1399.1,0.0],["2024-12","email","none","1_opening",225,32,228992.49,29062.52],["2024-12","email","gold","2_early_mid",41,9,53130.61,8395.2],["2024-12","sms","silver","3_late_mid",34,6,39473.0,5675.27],["2024-10","sms","none","2_early_mid",127,17,164526.51,20923.26],["2024-10","email","silver","3_late_mid",55,8,66426.91,4293.66],["2024-10","whatsapp","gold","3_late_mid",25,3,27419.23,4174.64],["2024-11","sms","platinum","4_closing",6,2,7868.46,937.2],["2024-09","email","silver","3_late_mid",54,3,61805.92,2827.62],["2024-09","sms","silver","4_closing",12,2,7985.49,1164.95],["2024-09","whatsapp","platinum","3_late_mid",11,1,8749.18,1066.49],["2025-06","in_app","platinum","2_early_mid",19,0,28666.24,0.0],["2024-07","in_app","none","1_opening",331,51,382792.56,56027.62],["2024-07","sms","none","1_opening",53,7,65404.97,8641.72],["2024-07","whatsapp","silver","4_closing",9,2,6759.45,1197.58],["2024-07","email","silver","2_early_mid",33,4,37368.31,3738.34],["2024-07","whatsapp","gold","3_late_mid",7,1,7152.53,864.6],["2025-05","email","none","1_opening",252,34,308322.7,42913.28],["2025-05","email","silver","4_closing",28,5,27788.72,4773.58],["2024-09","sms","platinum","4_closing",4,0,4427.94,0.0],["2024-09","email","gold","4_closing",9,0,12312.25,0.0],["2025-02","in_app","platinum","2_early_mid",57,11,49714.34,12520.12],["2025-02","email","platinum","4_closing",5,2,8101.44,4683.61],["2025-03","email","none","3_late_mid",128,21,138220.99,23870.99],["2025-03","email","gold","1_opening",41,7,41125.5,5951.99],["2025-04","whatsapp","gold","3_late_mid",35,7,45761.08,7018.41],["2025-04","sms","none","3_late_mid",78,12,95339.71,16976.08],["2025-04","email","gold","3_late_mid",18,1,20207.47,1056.63],["2025-04","sms","silver","1_opening",79,17,95400.68,25271.27],["2025-04","email","platinum","1_opening",28,1,32380.83,2488.71],["2025-04","whatsapp","platinum","4_closing",9,0,9661.94,0.0],["2024-08","email","none","2_early_mid",174,28,203892.79,34876.48],["2024-08","sms","silver","1_opening",54,4,60925.67,7274.33],["2024-08","whatsapp","silver","4_closing",37,5,47059.79,4239.74],["2024-08","email","platinum","1_opening",19,2,15074.54,2699.98],["2024-08","whatsapp","gold","2_early_mid",37,7,45054.83,9537.66],["2024-08","sms","gold","4_closing",11,0,14322.97,0.0],["2025-01","whatsapp","none","4_closing",75,12,77623.67,10667.06],["2025-01","whatsapp","platinum","1_opening",28,5,42300.84,8693.71],["2025-01","in_app","platinum","1_opening",73,6,85030.26,6751.11],["2024-11","email","none","1_opening",222,33,250781.76,31603.96],["2024-11","whatsapp","none","1_opening",352,47,411177.53,50280.43],["2024-11","sms","gold","4_closing",8,3,10131.56,3474.67],["2024-11","sms","silver","3_late_mid",14,1,17105.09,2228.57],["2024-11","email","gold","3_late_mid",26,4,26970.21,3380.53],["2024-11","sms","platinum","3_late_mid",11,1,7893.53,750.05],["2025-06","in_app","silver","4_closing",33,9,39312.64,11114.91],["2025-07","sms","gold","4_closing",1,0,618.01,0.0],["2025-07","email","gold","3_late_mid",1,0,1434.28,0.0],["2025-07","email","silver","4_closing",2,1,2735.22,1718.45],["2024-12","in_app","silver","1_opening",359,42,400140.35,47889.69],["2024-12","in_app","gold","1_opening",164,30,209580.38,42992.86],["2024-12","sms","silver","4_closing",20,2,18750.24,4797.14],["2024-12","whatsapp","platinum","2_early_mid",31,4,38014.4,4724.04],["2024-10","sms","gold","1_opening",34,4,43030.22,7185.19],["2024-10","whatsapp","none","2_early_mid",250,44,283917.19,50601.73],["2024-10","whatsapp","gold","4_closing",15,2,18818.14,1499.0],["2024-10","email","silver","4_closing",26,2,26838.53,2556.38],["2024-09","in_app","none","2_early_mid",648,101,736852.92,113237.67],["2024-09","sms","platinum","3_late_mid",10,1,9044.33,1157.64],["2024-09","email","none","2_early_mid",159,26,193656.28,32577.16],["2024-09","email","gold","3_late_mid",22,5,22612.59,4521.95],["2024-09","sms","silver","3_late_mid",29,4,33372.63,3962.92],["2024-09","whatsapp","gold","1_opening",68,15,72157.55,21118.86],["2024-09","whatsapp","platinum","4_closing",4,0,2958.76,0.0],["2025-06","sms","platinum","1_opening",6,1,7140.2,482.83],["2024-07","email","platinum","2_early_mid",4,0,2007.28,0.0],["2024-07","whatsapp","silver","3_late_mid",20,3,25187.08,2598.83],["2024-07","sms","silver","2_early_mid",20,4,22144.52,6132.63],["2024-07","email","none","1_opening",79,9,104457.54,11086.99],["2024-07","whatsapp","gold","4_closing",7,0,13692.18,0.0],["2024-07","in_app","gold","2_early_mid",31,3,41546.31,3186.31],["2025-05","sms","platinum","2_early_mid",10,1,14178.7,1469.44],["2025-05","sms","silver","1_opening",63,11,79380.41,16789.39],["2025-05","email","silver","3_late_mid",46,4,68766.45,9711.14],["2024-09","email","silver","4_closing",18,4,19169.64,4134.7],["2025-02","in_app","none","2_early_mid",615,109,739402.82,142062.02],["2025-02","in_app","silver","2_early_mid",282,30,313276.17,26034.63],["2025-02","email","silver","2_early_mid",63,10,80557.3,15643.42],["2025-02","sms","none","3_late_mid",68,14,75247.59,14602.29],["2025-02","email","gold","1_opening",49,6,59803.27,4672.53],["2025-03","in_app","silver","4_closing",100,9,109351.11,6718.44],["2025-03","whatsapp","gold","1_opening",55,5,66308.65,8768.84],["2025-03","email","platinum","2_early_mid",18,2,15432.07,2415.4],["2025-03","whatsapp","none","2_early_mid",240,40,283380.41,46560.09],["2025-03","sms","none","4_closing",46,5,54803.68,7913.87],["2025-04","sms","gold","1_opening",26,7,34756.0,12937.16],["2025-04","whatsapp","none","3_late_mid",153,24,187598.7,27184.19],["2025-04","in_app","none","3_late_mid",408,54,497103.58,71498.76],["2024-08","email","gold","4_closing",10,2,9807.07,1488.16],["2024-08","in_app","gold","1_opening",164,28,204975.12,33445.88],["2024-08","email","silver","4_closing",28,2,31075.11,1998.47],["2025-01","in_app","none","1_opening",910,144,1107318.52,185966.04],["2025-01","email","gold","1_opening",40,7,44441.4,9336.13],["2025-01","sms","gold","1_opening",28,3,32219.26,1725.98],["2025-01","email","platinum","2_early_mid",15,4,13594.23,2233.33],["2024-11","in_app","silver","2_early_mid",294,57,339700.65,76812.11],["2024-11","sms","none","3_late_mid",66,12,85080.56,14830.07],["2024-11","in_app","gold","2_early_mid",110,16,146705.56,24101.78],["2025-06","whatsapp","platinum","1_opening",13,4,15360.13,5613.91],["2025-06","in_app","none","2_early_mid",300,41,343607.4,48954.47],["2025-06","whatsapp","none","3_late_mid",63,10,64594.72,12539.18],["2025-06","sms","silver","2_early_mid",22,2,26258.79,2610.88],["2025-06","whatsapp","gold","2_early_mid",18,0,25095.3,0.0],["2025-06","email","none","4_closing",23,3,22237.79,3793.66],["2025-07","in_app","none","4_closing",12,0,13953.48,0.0],["2025-07","sms","none","4_closing",2,0,1553.58,0.0],["2025-07","in_app","gold","3_late_mid",1,0,2284.5,0.0],["2025-07","whatsapp","platinum","1_opening",1,1,985.34,985.34],["2024-12","whatsapp","silver","2_early_mid",125,20,164316.19,27664.66],["2024-12","sms","none","2_early_mid",113,21,143779.39,28010.1],["2024-12","whatsapp","gold","2_early_mid",45,9,56255.56,11065.36],["2024-12","email","silver","3_late_mid",52,7,59754.79,9271.44],["2024-10","in_app","none","3_late_mid",402,62,462387.09,64918.25],["2024-10","email","none","1_opening",259,35,296448.14,50536.42],["2024-10","in_app","platinum","1_opening",88,15,97084.72,18361.74],["2024-10","email","gold","1_opening",56,9,58408.98,8157.44],["2024-10","email","platinum","4_closing",8,1,12505.68,1605.74],["2024-09","in_app","gold","3_late_mid",65,8,79097.92,13666.29],["2024-09","in_app","silver","2_early_mid",268,45,312354.34,51056.41],["2024-09","whatsapp","silver","3_late_mid",70,10,92680.01,11301.61],["2024-09","sms","none","4_closing",44,9,63364.8,13461.85],["2025-06","email","gold","2_early_mid",17,1,17267.26,416.63],["2024-07","email","gold","1_opening",11,1,13128.25,2750.77],["2024-07","whatsapp","none","3_late_mid",57,6,68701.4,4340.98],["2024-07","in_app","silver","4_closing",26,6,32593.78,11150.65],["2024-07","sms","gold","1_opening",9,2,13152.4,2173.64],["2025-05","sms","none","3_late_mid",77,7,87167.47,6579.24],["2025-05","whatsapp","silver","3_late_mid",69,10,90345.35,16196.59],["2025-05","sms","gold","1_opening",20,2,30122.6,3993.96],["2025-03","whatsapp","platinum","4_closing",8,1,13145.96,1915.34],["2025-02","whatsapp","silver","3_late_mid",59,16,56827.03,19220.41],["2025-02","in_app","gold","4_closing",36,8,34648.31,6294.72],["2025-02","whatsapp","none","4_closing",57,8,70162.72,13422.89],["2025-02","in_app","platinum","1_opening",71,5,78407.1,5605.38],["2025-02","sms","platinum","3_late_mid",7,2,8599.52,4187.77],["2025-03","email","gold","2_early_mid",34,6,39600.76,3680.81],["2025-03","whatsapp","silver","3_late_mid",64,12,92034.89,17735.03],["2025-03","in_app","platinum","4_closing",23,4,25603.02,4706.66],["2025-04","email","none","3_late_mid",103,15,113498.77,16319.02],["2025-04","sms","silver","2_early_mid",45,5,50001.57,4125.07],["2025-04","email","platinum","2_early_mid",11,1,13785.48,996.91],["2024-08","in_app","none","3_late_mid",422,67,501547.15,71875.5],["2024-08","whatsapp","gold","1_opening",60,10,77860.06,13926.65],["2024-08","email","none","1_opening",254,32,310821.77,41028.26],["2024-08","sms","silver","2_early_mid",48,7,60274.19,10183.82],["2024-08","email","platinum","2_early_mid",14,6,16434.58,6603.31],["2025-01","email","none","4_closing",63,8,76493.56,10591.69],["2025-01","in_app","gold","3_late_mid",66,12,75347.83,8752.99],["2025-01","in_app","platinum","2_early_mid",51,11,54205.29,12960.69],["2025-01","whatsapp","platinum","2_early_mid",15,3,16907.0,2772.53],["2024-11","whatsapp","none","2_early_mid",243,21,283739.38,31774.03],["2024-11","email","none","2_early_mid",197,28,255955.3,35219.47],["2024-11","email","platinum","3_late_mid",6,1,8737.23,1358.15],["2024-12","in_app","silver","2_early_mid",309,37,364332.93,43728.13],["2024-12","in_app","gold","2_early_mid",130,16,158019.45,17206.2],["2024-12","whatsapp","platinum","1_opening",30,4,41902.94,4401.12],["2024-10","whatsapp","none","1_opening",322,50,397585.38,67837.5],["2024-10","in_app","silver","4_closing",102,19,134498.86,29074.73],["2024-10","in_app","gold","4_closing",28,2,29447.81,1666.64],["2024-10","sms","gold","2_early_mid",25,4,27956.0,3755.52],["2024-09","in_app","none","1_opening",893,138,1069867.94,154287.47],["2024-09","whatsapp","gold","2_early_mid",48,8,57747.37,11578.3],["2024-09","email","none","1_opening",242,29,299875.43,40488.14],["2024-09","email","platinum","4_closing",6,0,6395.43,0.0],["2025-06","sms","platinum","2_early_mid",1,0,2169.1,0.0],["2024-07","email","none","2_early_mid",55,8,65525.47,8673.0],["2024-07","in_app","gold","1_opening",52,5,57648.47,3549.35],["2024-07","sms","silver","1_opening",19,1,22677.61,1149.18],["2024-07","email","platinum","1_opening",5,1,3496.34,550.68],["2024-07","sms","platinum","4_closing",1,0,385.65,0.0],["2025-05","sms","platinum","1_opening",13,3,17964.34,5462.99],["2025-05","sms","silver","2_early_mid",44,3,48988.24,5860.79],["2025-05","in_app","platinum","4_closing",20,2,30221.98,2809.72],["2025-05","whatsapp","gold","4_closing",12,1,15463.16,1353.69],["2025-03","sms","platinum","3_late_mid",8,1,8107.42,1368.58],["2025-02","in_app","none","1_opening",822,124,984506.53,144314.75],["2025-02","in_app","silver","1_opening",336,44,391694.88,50223.67],["2025-02","email","none","4_closing",44,7,59544.8,12144.84],["2025-02","email","silver","1_opening",100,17,113456.9,10425.06],["2025-02","sms","gold","4_closing",8,1,12121.93,1521.06],["2025-02","whatsapp","gold","4_closing",15,1,19094.07,709.82],["2025-02","email","gold","2_early_mid",22,4,34618.36,2520.29],["2025-03","whatsapp","none","1_opening",330,51,411241.47,67198.02],["2025-03","whatsapp","gold","2_early_mid",42,6,53517.77,7809.93],["2025-03","email","platinum","1_opening",26,2,25295.64,2111.34],["2025-04","email","silver","3_late_mid",40,7,43120.02,5966.62],["2025-04","sms","gold","2_early_mid",20,1,23990.35,2298.89],["2025-04","in_app","gold","4_closing",39,6,56979.55,9268.44],["2024-08","in_app","silver","3_late_mid",186,25,227853.07,33167.62],["2024-08","in_app","gold","2_early_mid",117,10,138693.46,15684.3],["2024-08","sms","none","3_late_mid",81,7,96896.86,8217.68],["2024-08","whatsapp","none","4_closing",68,13,92133.78,15206.79],["2025-01","in_app","none","2_early_mid",652,93,790612.99,119879.74],["2025-01","email","platinum","1_opening",24,4,23100.39,4824.13],["2025-01","in_app","silver","4_closing",84,9,91007.01,4671.84],["2025-01","email","gold","2_early_mid",30,3,35125.76,1678.93],["2025-01","whatsapp","silver","4_closing",26,2,32593.74,6191.42],["2025-01","sms","gold","2_early_mid",22,4,23651.01,6100.76],["2024-11","in_app","gold","1_opening",151,19,180751.02,21191.21],["2024-11","in_app","silver","1_opening",354,54,434288.75,63203.98],["2024-11","whatsapp","gold","4_closing",18,4,17919.11,2633.32],["2025-06","in_app","none","1_opening",372,66,451441.59,78828.32],["2025-06","whatsapp","gold","1_opening",22,2,30233.06,3491.56],["2025-06","sms","silver","1_opening",41,7,47679.33,9841.31],["2025-06","whatsapp","silver","3_late_mid",33,8,48553.82,14278.48],["2025-06","email","gold","1_opening",19,1,20537.46,1254.42],["2025-06","whatsapp","platinum","2_early_mid",8,1,9799.24,3454.15],["2025-07","whatsapp","gold","3_late_mid",1,0,1876.52,0.0],["2025-07","in_app","platinum","3_late_mid",3,2,6317.91,4860.49],["2025-07","in_app","silver","3_late_mid",4,0,8406.7,0.0],["2025-07","sms","platinum","3_late_mid",1,0,209.29,0.0],["2025-07","email","platinum","2_early_mid",1,0,102.55,0.0],["2024-12","sms","none","1_opening",161,23,187960.08,22312.49],["2024-12","whatsapp","gold","1_opening",45,7,50043.18,8329.38],["2024-12","whatsapp","silver","1_opening",132,25,161396.01,25037.9],["2024-12","in_app","platinum","4_closing",17,3,24318.96,3412.67],["2024-10","email","none","2_early_mid",203,27,235304.33,33051.06],["2024-10","in_app","platinum","2_early_mid",53,10,60677.83,11278.2],["2024-10","email","gold","2_early_mid",40,3,40590.94,2516.41],["2024-09","in_app","silver","1_opening",390,57,448996.45,74060.95],["2024-09","whatsapp","none","4_closing",78,9,88684.06,17477.37],["2024-07","email","gold","2_early_mid",8,3,11603.9,2688.69],["2024-07","whatsapp","platinum","4_closing",3,0,2483.63,0.0],["2024-07","sms","gold","2_early_mid",1,0,2006.76,0.0],["2025-05","in_app","none","4_closing",207,33,261773.57,45905.76],["2025-05","sms","gold","2_early_mid",20,3,18113.55,2345.38],["2025-05","whatsapp","platinum","3_late_mid",13,3,15690.99,3515.51],["2025-02","whatsapp","none","1_opening",322,51,373176.89,64272.58],["2025-02","in_app","gold","1_opening",177,34,204023.84,38206.46],["2025-02","in_app","platinum","4_closing",19,3,23333.6,2639.97],["2025-02","email","platinum","2_early_mid",13,4,10640.18,2707.29],["2025-02","whatsapp","platinum","3_late_mid",10,2,11668.24,2275.53],["2025-02","sms","silver","3_late_mid",25,4,26169.03,5240.87],["2025-03","in_app","platinum","1_opening",78,6,99846.01,6429.31],["2025-04","whatsapp","platinum","2_early_mid",19,3,25400.38,4112.84],["2025-04","whatsapp","silver","3_late_mid",67,11,85266.64,18971.13],["2024-08","whatsapp","silver","2_early_mid",102,16,119928.77,16944.26],["2024-08","whatsapp","gold","4_closing",17,2,13348.53,863.61],["2024-08","email","none","4_closing",54,6,60501.36,4365.48],["2024-08","sms","gold","2_early_mid",19,2,21176.21,1095.07],["2025-01","email","none","1_opening",269,38,300597.03,38266.92],["2025-01","whatsapp","none","2_early_mid",262,46,309139.84,46314.64],["2024-11","email","silver","3_late_mid",57,7,73492.63,10094.24],["2024-11","sms","gold","2_early_mid",24,5,35265.32,4803.01],["2024-11","whatsapp","platinum","3_late_mid",11,3,7841.55,2339.06],["2025-06","in_app","silver","2_early_mid",138,31,179473.74,41681.17],["2025-06","in_app","platinum","3_late_mid",11,0,16507.36,0.0],["2025-07","email","none","3_late_mid",5,1,6121.43,2121.27],["2025-07","whatsapp","none","3_late_mid",6,1,5999.65,2336.12],["2025-07","email","silver","2_early_mid",3,1,4039.91,153.46],["2025-07","sms","silver","3_late_mid",1,0,314.02,0.0],["2024-12","sms","silver","2_early_mid",55,11,55786.52,12037.4],["2024-12","email","gold","3_late_mid",35,2,41194.15,1968.72],["2024-12","whatsapp","platinum","4_closing",2,0,2955.28,0.0],["2024-10","whatsapp","gold","2_early_mid",43,9,51495.51,3928.84],["2024-10","email","silver","2_early_mid",98,12,145241.75,25216.56],["2024-10","in_app","silver","1_opening",369,57,448678.33,70443.63],["2024-10","in_app","gold","1_opening",149,14,166267.56,14406.48],["2024-10","whatsapp","none","4_closing",85,6,96024.38,4274.49],["2024-10","sms","none","3_late_mid",81,19,90919.24,20040.8],["2024-09","email","none","4_closing",59,8,71254.2,9785.97],["2024-09","in_app","none","4_closing",236,39,284896.12,53379.37],["2024-09","email","silver","2_early_mid",75,15,92431.35,19148.6],["2024-09","whatsapp","platinum","2_early_mid",16,3,22622.77,4708.3],["2024-09","email","platinum","1_opening",24,5,24652.16,4298.96],["2025-06","sms","gold","3_late_mid",5,2,5944.77,773.31],["2024-07","email","silver","3_late_mid",15,5,20181.41,7824.71],["2024-07","email","platinum","4_closing",3,0,3989.61,0.0],["2024-07","in_app","gold","4_closing",14,2,23225.27,3695.38],["2024-07","whatsapp","gold","2_early_mid",18,3,26134.04,6773.34],["2024-07","sms","platinum","1_opening",5,0,6993.83,0.0],["2024-07","sms","silver","4_closing",5,0,6763.65,0.0],["2025-05","in_app","platinum","1_opening",66,10,80538.73,15260.73],["2025-05","whatsapp","gold","1_opening",58,10,74759.27,10556.16],["2025-05","sms","platinum","4_closing",3,0,5209.81,0.0],["2025-02","email","none","2_early_mid",186,35,212604.11,42031.6],["2025-02","whatsapp","gold","2_early_mid",41,7,50219.87,9326.46],["2025-02","sms","gold","2_early_mid",17,2,12556.9,1315.39],["2025-03","in_app","silver","1_opening",378,65,479176.62,78751.64],["2025-03","sms","none","1_opening",156,22,185956.67,19937.59],["2025-03","in_app","gold","3_late_mid",81,11,93304.46,12945.2],["2025-03","sms","silver","3_late_mid",37,5,39318.98,4355.54],["2025-03","whatsapp","platinum","1_opening",27,3,37123.5,4909.05],["2025-04","in_app","silver","3_late_mid",185,32,218882.5,43399.03],["2025-04","in_app","gold","2_early_mid",114,15,146619.25,22295.34],["2025-04","sms","gold","4_closing",5,0,5396.14,0.0],["2024-08","in_app","gold","4_closing",29,5,32122.55,6710.69],["2024-08","whatsapp","none","2_early_mid",269,32,322337.51,37636.05],["2024-08","email","silver","1_opening",100,14,112745.74,19396.31],["2024-08","email","gold","1_opening",45,9,49498.14,8819.0],["2024-08","whatsapp","platinum","3_late_mid",15,1,18387.86,2073.59],["2024-08","sms","platinum","3_late_mid",9,2,9992.64,2848.4],["2025-01","in_app","none","4_closing",209,34,249214.21,36300.1],["2025-01","in_app","silver","2_early_mid",329,51,375547.31,59009.62],["2025-01","whatsapp","silver","2_early_mid",107,17,111074.46,16820.3],["2025-01","sms","silver","3_late_mid",26,3,29247.11,4697.61],["2025-01","sms","gold","4_closing",6,0,6283.68,0.0],["2025-01","sms","platinum","3_late_mid",6,0,6565.57,0.0],["2025-01","email","gold","4_closing",8,0,10139.89,0.0],["2024-11","whatsapp","gold","2_early_mid",44,2,54226.63,1084.33],["2025-06","whatsapp","platinum","4_closing",3,0,3398.49,0.0],["2025-06","email","none","1_opening",112,24,134570.16,32366.62],["2025-06","email","silver","3_late_mid",16,3,22704.13,4278.47],["2025-07","sms","none","1_opening",10,1,14062.68,830.93],["2025-07","in_app","none","1_opening",43,2,53383.81,3762.46],["2025-07","whatsapp","platinum","4_closing",1,0,2524.15,0.0],["2025-02","email","gold","4_closing",6,0,3682.75,0.0],["2024-12","in_app","none","3_late_mid",405,63,501258.74,86972.38],["2024-12","in_app","platinum","2_early_mid",54,9,60482.94,7370.64],["2024-12","email","platinum","1_opening",22,2,29463.01,2532.46],["2024-10","in_app","platinum","4_closing",19,5,13559.7,4060.95],["2024-10","whatsapp","silver","3_late_mid",70,11,86564.32,18401.92],["2024-10","email","platinum","1_opening",19,3,23756.1,3529.91],["2024-10","email","none","4_closing",65,12,75544.6,15897.27],["2024-10","email","gold","4_closing",16,0,20300.14,0.0],["2024-10","sms","platinum","3_late_mid",7,1,8417.59,1133.09],["2024-09","whatsapp","none","2_early_mid",235,36,278144.55,41165.24],["2024-09","sms","none","1_opening",137,14,170993.12,9689.62],["2024-09","in_app","platinum","3_late_mid",36,4,44765.93,4583.7],["2024-07","in_app","silver","1_opening",112,11,124091.74,12407.74],["2024-07","whatsapp","platinum","2_early_mid",4,1,4196.58,1823.41],["2025-05","in_app","none","2_early_mid",641,102,751562.44,118158.86],["2025-05","email","gold","3_late_mid",19,4,27462.12,7274.38],["2025-05","sms","gold","4_closing",6,0,5898.15,0.0],["2025-05","email","platinum","3_late_mid",10,1,16922.38,1774.83],["2025-03","whatsapp","gold","4_closing",13,4,14748.02,4694.9],["2024-07","email","gold","4_closing",2,0,3354.58,0.0],["2024-07","sms","gold","4_closing",1,0,329.02,0.0]]}</script>
+<script>
+(function () {
+  const root = document.querySelector('.viz-root');
+  const BASELINE = 14.75;
+
+  function fmtPct(v) { return v.toFixed(1) + '%'; }
+
+  function renderBarChart(containerId, rows, opts) {
+    const el = document.getElementById(containerId);
+    const max = opts.max;
+    const baselinePct = (BASELINE / max) * 100;
+    el.innerHTML = rows.map(function (r) {
+      const widthPct = (r.value / max) * 100;
+      const color = r.critical ? 'var(--status-critical)' : 'var(--series-1)';
+      const flag = r.critical
+        ? '<span class="bar-flag">⚠ ' + r.flagText + '</span>'
+        : '<span class="bar-flag" style="color:var(--text-muted); font-weight:400;">' + (r.flagText || 'in line with baseline') + '</span>';
+      return (
+        '<div class="bar-row">' +
+          '<div class="bar-label">' + r.label + '<br><span style="color:var(--text-muted); font-size:11px;">n=' + r.n.toLocaleString() + '</span></div>' +
+          '<div class="bar-track">' +
+            '<div class="bar-baseline" style="left:' + baselinePct + '%"></div>' +
+            '<div class="bar-fill" style="width:' + widthPct + '%; background:' + color + ';"></div>' +
+          '</div>' +
+          '<div class="bar-value">' + fmtPct(r.value) + '</div>' +
+        '</div>' +
+        '<div style="grid-column:2; margin-top:-8px; margin-bottom:2px;">' + flag + '</div>'
+      );
+    }).join('');
+  }
+
+  renderBarChart('topic-chart', [
+    { label: 'Complaints (noise, refunds, cleanliness…)', value: 14.48, n: 21695 },
+    { label: 'Everyday questions (booking, wifi, check-in…)', value: 14.97, n: 34364 },
+    { label: 'Compliments', value: 14.02, n: 2446 }
+  ], { max: 25 });
+
+  // --- Revenue lost to cancellation (static, trailing 12 months) ---
+  const REV = JSON.parse(document.getElementById('rev-agg-data').textContent);
+  const revRows = REV.rows.map(function (r) {
+    const o = {};
+    REV.cols.forEach(function (c, i) { o[c] = r[i]; });
+    return o;
+  });
+  const STAGE_LABEL = { '1_opening': 'Opening', '2_early_mid': 'Early-mid', '3_late_mid': 'Late-mid', '4_closing': 'Closing' };
+  const revStages = ['1_opening', '2_early_mid', '3_late_mid', '4_closing'];
+
+  function fmtMoney(v) {
+    if (v >= 1e6) return '$' + (v / 1e6).toFixed(2) + 'M';
+    if (v >= 1e3) return '$' + (v / 1e3).toFixed(1) + 'k';
+    return '$' + v.toFixed(0);
+  }
+
+  (function renderRevenue() {
+    const totalPrice = revRows.reduce(function (s, r) { return s + r.total_price; }, 0);
+    const cancelledPrice = revRows.reduce(function (s, r) { return s + r.cancelled_price; }, 0);
+    const rate = totalPrice > 0 ? (cancelledPrice / totalPrice) * 100 : 0;
+
+    document.getElementById('rev-lost').textContent = fmtMoney(cancelledPrice);
+    document.getElementById('rev-total').textContent = fmtMoney(totalPrice);
+    document.getElementById('rev-rate').textContent = rate.toFixed(1) + '%';
+
+    const byStage = {};
+    revStages.forEach(function (s) { byStage[s] = { cancelled: 0, bookings: 0, cancelled_bookings: 0 }; });
+    revRows.forEach(function (r) {
+      byStage[r.stage].cancelled += r.cancelled_price;
+      byStage[r.stage].bookings += r.bookings;
+      byStage[r.stage].cancelled_bookings += r.cancelled_bookings;
+    });
+    const rows = revStages.map(function (s) {
+      return { label: STAGE_LABEL[s], value: byStage[s].cancelled, bookings: byStage[s].bookings, cancelled: byStage[s].cancelled_bookings };
+    });
+    const max = Math.max.apply(null, rows.map(function (r) { return r.value; }).concat([1]));
+    document.getElementById('rev-stage-chart').innerHTML = rows.map(function (r) {
+      const w = (r.value / max) * 100;
+      return '<div class="bar-row">' +
+        '<div class="bar-label">' + r.label + '<br><span style="color:var(--text-muted); font-size:11px;">' + r.cancelled.toLocaleString() + ' of ' + r.bookings.toLocaleString() + ' bookings</span></div>' +
+        '<div class="bar-track"><div class="bar-fill" style="width:' + w + '%; background:var(--status-critical);"></div></div>' +
+        '<div class="bar-value">' + fmtMoney(r.value) + '</div>' +
+      '</div>';
+    }).join('');
+
+    document.getElementById('rev-table').innerHTML =
+      '<table class="data-table">' +
+        '<thead><tr><th>Stage</th><th>Bookings</th><th>Cancelled</th><th>Revenue lost</th></tr></thead>' +
+        '<tbody>' + rows.map(function (r) {
+          return '<tr><td>' + r.label + '</td><td>' + r.bookings.toLocaleString() + '</td><td>' + r.cancelled.toLocaleString() + '</td><td>' + fmtMoney(r.value) + '</td></tr>';
+        }).join('') + '</tbody>' +
+      '</table>';
+  })();
+
+  renderBarChart('event-chart', [
+    { label: "Opening message never gets a reply", value: 23.26, n: 86, critical: true, flagText: '58% above baseline' },
+    { label: 'Conversation ends on a frustrated note', value: 14.93, n: 26499 },
+    { label: 'A reply anywhere takes >15 minutes', value: 14.83, n: 22084 },
+    { label: 'Escalated to a support agent', value: 14.62, n: 29295 }
+  ], { max: 25 });
+
+  // --- Revenue-at-risk by price quintile ---
+  // Source: analysis/revenue_at_risk_by_price.csv (12-month window)
+  const valueData = [
+    { label: 'Lowest fifth', avgPrice: 259, n: 14470, rate: 15.06, revenue: 561126 },
+    { label: '2nd fifth', avgPrice: 635, n: 14470, rate: 14.22, revenue: 1306790 },
+    { label: 'Middle fifth', avgPrice: 1026, n: 14470, rate: 14.39, revenue: 2139695 },
+    { label: '4th fifth', avgPrice: 1511, n: 14469, rate: 14.77, revenue: 3228854 },
+    { label: 'Highest fifth', avgPrice: 2533, n: 14469, rate: 15.18, revenue: 5574601 }
+  ];
+
+  (function renderValueChart() {
+    const el = document.getElementById('value-chart');
+    const max = Math.max.apply(null, valueData.map(function (r) { return r.revenue; }));
+    el.innerHTML = valueData.map(function (r) {
+      const widthPct = (r.revenue / max) * 100;
+      const color = r.label === 'Highest fifth' ? 'var(--status-critical)' : 'var(--series-1)';
+      const flag = r.label === 'Highest fifth'
+        ? '<span class="bar-flag">⚠ 43% of all revenue lost</span>'
+        : '<span class="bar-flag" style="color:var(--text-muted); font-weight:400;">avg. price $' + r.avgPrice.toLocaleString() + ', cancel rate ' + r.rate.toFixed(1) + '%</span>';
+      return (
+        '<div class="bar-row">' +
+          '<div class="bar-label">' + r.label + '<br><span style="color:var(--text-muted); font-size:11px;">n=' + r.n.toLocaleString() + '</span></div>' +
+          '<div class="bar-track">' +
+            '<div class="bar-fill" style="width:' + widthPct + '%; background:' + color + ';"></div>' +
+          '</div>' +
+          '<div class="bar-value">$' + (r.revenue / 1e6).toFixed(2) + 'M</div>' +
+        '</div>' +
+        '<div style="grid-column:2; margin-top:-8px; margin-bottom:2px;">' + flag + '</div>'
+      );
+    }).join('');
+  })();
+
+  document.getElementById('value-table').innerHTML =
+    '<table class="data-table">' +
+      '<thead><tr><th>Price group</th><th>Avg. price</th><th>Bookings</th><th>Cancellation rate</th><th>Revenue lost to cancellation</th></tr></thead>' +
+      '<tbody>' +
+      valueData.map(function (r) {
+        return '<tr><td>' + r.label + '</td><td>$' + r.avgPrice.toLocaleString() + '</td><td>' + r.n.toLocaleString() + '</td><td>' + r.rate.toFixed(1) + '%</td><td>$' + r.revenue.toLocaleString() + '</td></tr>';
+      }).join('') +
+      '</tbody>' +
+    '</table>';
+})();
+</script>
