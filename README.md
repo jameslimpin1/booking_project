@@ -118,18 +118,21 @@ dbt docs generate && dbt docs serve   # browse full column-level documentation
 All paths in `_staging__sources.yml` are relative to the project root — run
 `dbt`/`duckdb` commands from `booking_project/`, not a subdirectory.
 
-### Staging is incremental
+### Materialization strategy
 
-`stg_dim_conversations` and `stg_fact_chat_messages` are `materialized='incremental'`,
-keyed on `conversation_id`/`message_id` and filtered on a `generated_at`
-cursor column (wall-clock time the row was generated, not a business date) —
-a re-run only pulls in rows newer than what's already loaded instead of
-rescanning the full source every time. `generated_at` is excluded from every
-model downstream of staging; it exists purely as the incremental cursor and
-the [freshness check](#keeping-the-dashboard-fresh) below.
-
-If you change the materialization or need to force a clean rebuild:
-`dbt run --full-refresh --select stg_dim_conversations stg_fact_chat_messages`.
+Staging is `view` (cheap passthrough, always reflects the current source);
+intermediate and marts are `table` (full recompute every run). Several
+models depend on whole-population or rolling-window statistics —
+`int_booking_cancellation_risk` (percent_rank across all confirmed
+bookings), `mart_booking_loss_events` (trailing-12-month window anchored to
+`max(conversation_started_at)`, so old rows age *out* as new data arrives),
+and `mart_price_quintile_risk` (ntile quintiles across the full population).
+An incremental, append-only load would silently go stale for these — a
+previously-computed percentile/quintile/window boundary doesn't get
+revisited when new data shifts it, and everything downstream inherits that
+staleness. Given this dataset's size (72K–110K rows), a full rebuild of the
+whole pipeline runs in ~2-3 seconds, so there's no real performance case for
+trading that correctness away — every model here stays a full recompute.
 
 ## Keeping the dashboard fresh
 
@@ -142,13 +145,13 @@ change. `scripts/refresh_pipeline.sh` re-syncs them:
 scripts/refresh_pipeline.sh
 ```
 
-It runs, in order: `dbt build` (rebuild marts against current `data/*.parquet`,
-incrementally per above), `dbt source freshness` (reports staleness,
-non-blocking), then `scripts/export_dashboard_data.py`, which re-queries the
-marts and replaces each dashboard's JSON blocks in place — everything else in
-the HTML (layout, JS, styling) is left untouched. The drill-down conversation
-set (`dd-data`) is reselected deterministically (fixed reservoir-sample seed)
-so it's the same 216 conversations on every re-run against unchanged data.
+It runs, in order: `dbt build` (rebuild marts against current
+`data/*.parquet`), `dbt source freshness` (reports staleness, non-blocking),
+then `scripts/export_dashboard_data.py`, which re-queries the marts and
+replaces each dashboard's JSON blocks in place — everything else in the HTML
+(layout, JS, styling) is left untouched. The drill-down conversation set
+(`dd-data`) is reselected deterministically (fixed reservoir-sample seed) so
+it's the same 216 conversations on every re-run against unchanged data.
 
 This script does **not** regenerate synthetic data — run
 `python3 generate_hotel_chat_data.py` yourself first if you want a new

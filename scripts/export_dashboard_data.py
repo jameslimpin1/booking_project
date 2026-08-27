@@ -96,11 +96,20 @@ def build_dd_data(con):
     """, {"unanswered": unanswered_ids, "n": HIGH_RISK_N}).fetchall()]
 
     excluded = unanswered_ids + high_risk_ids
+    # Deterministic by conversation_id value, not table scan order: DuckDB's
+    # `USING SAMPLE ... (reservoir, seed)` only reproduces the same rows if
+    # the table's physical scan order is unchanged, which a `dbt build
+    # --full-refresh` rebuild does not guarantee even for identical data
+    # (confirmed by hand: reservoir sampling silently returned a different
+    # 80 conversations across two otherwise-identical rebuilds). Ordering by
+    # a hash of the id salted with a fixed seed depends only on the id
+    # values, so it's stable across rebuilds.
     typical_ids = [r[0] for r in con.execute(f"""
         select conversation_id
         from main_marts.mart_booking_loss_events
         where conversation_id not in (select unnest($excluded))
-        using sample {TYPICAL_N} rows (reservoir, {SAMPLE_SEED})
+        order by hash(conversation_id::varchar || '_{SAMPLE_SEED}')
+        limit {TYPICAL_N}
     """, {"excluded": excluded}).fetchall()]
 
     selected_ids = unanswered_ids + high_risk_ids + typical_ids
